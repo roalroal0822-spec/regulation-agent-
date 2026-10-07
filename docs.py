@@ -47,23 +47,23 @@ def main_points(case):
             where = op.get("loc") or (a.label if a else "")
             new_where = where.replace(a.label, nl, 1) if a and nl else where
             if op.get("all"):
-                pts.append(f"용어 '{op['find']}'을(를) '{op['repl']}'(으)로 정비함.")
+                pts.append(f"용어 {drafting.qj(op['find'], '을/를')} {drafting.qj(op['repl'], '으로/로')} 정비함.")
             elif re.search(r"제\d+조", op["find"]):
                 pts.append(f"상위 법령 조 번호 변경에 따라 인용 조문을 정비함(안 {new_where}).")
             else:
-                pts.append(f"{a.title if a else ''} 관련 '{op['find']}'을(를) '{op['repl']}'(으)로 변경함(안 {new_where}).")
+                pts.append(f"{a.title if a else ''} 관련 {drafting.qj(op['find'], '을/를')} {drafting.qj(op['repl'], '으로/로')} 변경함(안 {new_where}).")
         elif t == "insert":
             pts.append(f"{op['title']}에 관한 규정을 신설함(안 {regparse.alabel(*regparse.parse_key(op.get('_new_key') or op['after']))}).")
         elif t == "delete":
             pts.append(f"{a.title if a else ''} 규정을 삭제함(현행 {a.label if a else ''}).")
         elif t == "retitle":
-            pts.append(f"{a.label if a else ''}의 제목을 '{op['title']}'(으)로 변경함.")
+            pts.append(f"{a.label if a else ''}의 제목을 {drafting.qj(op['title'], '으로/로')} 변경함.")
         elif t in ("add_item", "add_para"):
             pts.append(f"{a.title if a else ''}에 '{op['text'][:40]}' 내용을 추가함(안 {nl}).")
         elif t == "appendix_replace":
-            pts.append(f"별표의 '{op['find']}'을(를) '{op['repl']}'(으)로 변경함.")
+            pts.append(f"별표의 {drafting.qj(op['find'], '을/를')} {drafting.qj(op['repl'], '으로/로')} 변경함.")
         elif t == "appendix_add":
-            pts.append(f"별표에 '{op['text'][:50]}'을(를) 추가함.")
+            pts.append(f"별표에 {drafting.qj(op['text'][:50], '을/를')} 추가함.")
     if case.get("changes"):
         pts.append("조 번호 이동에 따라 이 규정 안의 인용 조문을 정비함.")
     # 같은 문장 중복 제거

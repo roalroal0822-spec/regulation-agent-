@@ -5,7 +5,7 @@ import re
 from core import regparse
 from core.textutil import similarity
 
-from drafting import josa
+from drafting import josa, qj
 from library import RefFinder, norm_name
 
 
@@ -214,7 +214,7 @@ def _content_cands(add, e, loc, akey, text, ch, law_entry, cited):
             else:
                 op = {"type": "appendix_add", "after_find": last, "text": add_line}
             add(entry_id=e.id, doc=e.short, layer=e.layer, loc=loc, article=akey, type="목록 추가", law_key=ch["old_key"],
-                reason=f"{law_entry.short} {regparse.alabel(*regparse.parse_key(ch['new_key']))}({ch['title']})에 '{add_line}'이(가) 추가됩니다. 같은 목록을 옮겨 적은 곳입니다.",
+                reason=f"{law_entry.short} {regparse.alabel(*regparse.parse_key(ch['new_key']))}({ch['title']})에 {qj(add_line, '이/가')} 추가됩니다. 같은 목록을 옮겨 적은 곳입니다.",
                 law_old=ch["old"], law_new=ch["new"], text=text, op=op, suggest=(text + "\n" + add_line) if not akey else None)
 
 

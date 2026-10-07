@@ -93,7 +93,14 @@ def _internal_refs(e):
 
 
 def _around(text, r, w=18):
-    return text[max(0, r["start"] - w): r["end"] + w].replace("\n", " ").strip()
+    """인용 앞뒤 문맥을 어절 단위로 자른다."""
+    a, b = max(0, r["start"] - w), min(len(text), r["end"] + w)
+    while a > 0 and not text[a - 1].isspace():
+        a -= 1
+    while b < len(text) and not text[b].isspace():
+        b += 1
+    s = text[a:b].replace("\n", " ").strip()
+    return ("…" if a > 0 else "") + s + ("…" if b < len(text) else "")
 
 
 def _external_refs(lib):
@@ -123,7 +130,7 @@ def _external_refs(lib):
                     continue  # 국가 법령은 규정집에 없을 수 있다
                 if norm_name(name, lib.org_name) == norm_name(e.title, lib.org_name):
                     continue
-                out.append(_issue("주의", "인용 규정 없음", e.short, loc, f"「{name}」이(가) 규정집에 없습니다. 이름이 바뀌었거나 폐지된 규정인지 확인하세요.", entry_id=e.id))
+                out.append(_issue("주의", "인용 규정 없음", e.short, loc, f"{josa('「' + name + '」', '이/가')} 규정집에 없습니다. 이름이 바뀌었거나 폐지된 규정인지 확인하세요.", entry_id=e.id))
             elif name != t.short and name != t.title:
                 out.append(_issue("주의", "규정명 표기", e.short, loc, f"「{name}」 → 정식 이름은 「{t.short}」입니다.",
                                   fix={"find": f"「{name}」", "repl": f"「{t.short}」"}, entry_id=e.id))
@@ -156,7 +163,7 @@ def _appendix(e, lib):
     for a in e.reg.articles:
         for m in RE_APPXREF.finditer("\n".join(a.body_lines())):
             if int(m.group(1)) not in have:
-                out.append(_issue("주의", "별표 없음", e.short, a.label, f"별표 {m.group(1)}을(를) 인용하지만 규정 본문에 별표가 없습니다(별도 파일인지 확인).", entry_id=e.id))
+                out.append(_issue("주의", "별표 없음", e.short, a.label, f"{josa('별표 ' + m.group(1), '을/를')} 인용하지만 규정 본문에 별표가 없습니다(별도 파일인지 확인).", entry_id=e.id))
     for line in e.reg.appendices:
         m = re.match(r"^\[별표\s*(\d+)\].*\(제(\d+)조(?:의(\d+))?\s*관련\)", line)
         if m:
@@ -180,7 +187,7 @@ def _forms(lib):
                     out.append(_issue("참고", "서식 없음", e.short, a.label, f"별지 제{n}호서식이 규정집 서식 폴더에 없습니다. (서식 파일 이름 예: [{e.short}] 별지{n} 서식이름.hwpx)", entry_id=e.id))
     for f in forms:
         if f.form_of and lib.by_name(f.form_of) is None:
-            out.append(_issue("주의", "서식 소속", f.short, "파일 이름", f"서식의 소속 규정 「{f.form_of}」이(가) 규정집에 없습니다.", entry_id=f.id))
+            out.append(_issue("주의", "서식 소속", f.short, "파일 이름", f"서식의 소속 규정 {josa('「' + f.form_of + '」', '이/가')} 규정집에 없습니다.", entry_id=f.id))
     return out
 
 

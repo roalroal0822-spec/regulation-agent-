@@ -37,6 +37,11 @@ def josa(word, pair):
     return word + (a if has_batchim(word) else b)
 
 
+def qj(word, pair):
+    """따옴표로 감싼 말 + 알맞은 조사. 예: qj("7일", "을/를") 는 '7일'을"""
+    return josa(f"'{word}'", pair)
+
+
 def placeholders(text):
     return re.findall(r"【([^】]*)】", text or "")
 

@@ -159,7 +159,7 @@ def parse_intent(text, entry, lib=None, head="이사장"):
             else:
                 ops.append(op)
                 if op.get("alternatives"):
-                    notes.append(f"'{op['find']}'이(가) 들어간 곳이 여러 곳입니다. {op['loc']}을(를) 골랐습니다. 다른 후보: " +
+                    notes.append(f"{drafting.qj(op['find'], '이/가')} 들어간 곳이 여러 곳입니다. {drafting.josa(op['loc'], '을/를')} 골랐습니다. 다른 후보: " +
                                  ", ".join(x["loc"] for x in op["alternatives"]))
             continue
         if RX_INSERT.search(cl) and not re.search(r"별표|별지", cl):
@@ -209,7 +209,7 @@ def _resolve_replace(cl, m, entry):
                               "score": _topic_score(ttoks, a.title + " " + text), "text": text})
                 break
     if not cands:
-        return {"error": f"'{cl}': 규정에서 '{find}'을(를) 찾지 못했습니다"}
+        return {"error": f"'{cl}': 규정에서 {drafting.qj(find, '을/를')} 찾지 못했습니다"}
     if everywhere:
         return {"type": "replace", "article": None, "find": find, "repl": repl, "all": True, "src": cl,
                 "loc": f"규정 전체({len(cands)}곳)"}
@@ -250,11 +250,11 @@ def _resolve_insert(cl, entry, lib, head):
             title = a.title if len(a.title) <= len(title) + 3 else title
             body = drafting.adapt(a, head=head, self_word=entry.self_word, from_word=e.self_word)
             ref = {"reg": e.short, "label": a.label, "title": a.title}
-            notes.append(f"신설 조문 '{title}'은(는) {e.short} {a.label}({a.title})을 참고해 작성했습니다. 내용을 확인하세요.")
+            notes.append(f"신설 조문 {drafting.qj(title, '은/는')} {e.short} {a.label}{drafting.josa('(' + a.title + ')', '을/를')} 참고해 작성했습니다. 내용을 확인하세요.")
     if body is None:
         x = re.sub(r"(?:의)?\s*(?:취소|철회|감면|반환|신청|기준|제한)$", "", title).strip() or title
         body = drafting.template_for(title, head=head, self_word=entry.self_word, x=x)
-        notes.append(f"신설 조문 '{title}'은(는) 표준 조문 틀로 작성했습니다. 【 】 부분을 채워 주세요.")
+        notes.append(f"신설 조문 {drafting.qj(title, '은/는')} 표준 조문 틀로 작성했습니다. 【 】 부분을 채워 주세요.")
     m = RX_AFTER.search(cl)
     if m:
         after = _key(m.group(1), m.group(2))
@@ -393,7 +393,7 @@ def apply(entry, ops, mode="branch", effective=None, lib=None):
                         reg.appendices[i] = line.replace(op["find"], op["repl"])
                         hit = True
                 if not hit:
-                    raise ValueError(f"별표에서 '{op['find']}'을(를) 찾지 못했습니다")
+                    raise ValueError(f"별표에서 {drafting.qj(op['find'], '을/를')} 찾지 못했습니다")
             elif t == "appendix_add":
                 idx = next((i for i, l in enumerate(reg.appendices) if op.get("after_find") and op["after_find"] in l), len(reg.appendices) - 1)
                 reg.appendices.insert(idx + 1, op["text"])
@@ -484,7 +484,7 @@ def _apply_replace(reg, op):
                 if not op.get("all"):
                     return
     if n == 0:
-        raise ValueError(f"'{find}'을(를) 찾지 못했습니다(이미 바뀌었거나 다른 작업과 겹침)")
+        raise ValueError(f"{drafting.qj(find, '을/를')} 찾지 못했습니다(이미 바뀌었거나 다른 작업과 겹침)")
 
 
 def _insert(reg, op, mode):
@@ -599,9 +599,12 @@ def propagate(lib, entry, mapping, ops):
                     reviews.append({"entry_id": e.id, "doc": e.short, "layer": e.layer, "loc": loc, "article": akey,
                                     "text": text, "suggest": text.replace(core, core.replace(op["find"], op["repl"], 1)),
                                     "note": f"개정되는 문구('{core}')가 여기에도 적혀 있습니다."})
-    # 중복 제거
+    # 중복 제거 (같은 위치에 고칠 문장 제안이 있으면 일반 안내는 뺀다)
+    concrete = {(x["entry_id"], x["loc"]) for x in reviews if x.get("suggest")}
     seen, uniq = set(), []
     for x in reviews:
+        if not x.get("suggest") and "new_text" not in x and (x["entry_id"], x["loc"]) in concrete:
+            continue
         k = (x["entry_id"], x["loc"], x.get("note"))
         if k not in seen:
             seen.add(k)
