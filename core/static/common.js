@@ -164,6 +164,7 @@ async function setupLLMBadge() {
   async function refresh() {
     const info = await api("GET", "/api/llm");
     badge.textContent = "모델: " + info.label;
+    badge.classList.toggle("on", !!(info.config && info.config.provider && info.config.provider !== "none"));
     return info;
   }
   badge.addEventListener("click", async () => {
