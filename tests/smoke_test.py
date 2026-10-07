@@ -68,6 +68,14 @@ def check_seomu(c):
     yield f"업무별 절차 카드 {len(p['cards'])}개", len(p["cards"]) >= 4
     r = c.call("POST", "/api/chat", {"text": "어제 부산에서 1박 2일 출장 다녀왔어요. 정산 어떻게 해요?"})
     yield f"상황 안내({r.get('card', {}).get('name')})", r.get("type") == "procedure"
+    s1 = c.call("POST", "/api/simulate", {"text": "출장비 정산을 10일 뒤에 제출하면 어떻게 돼?"})
+    yield f"업무 시뮬레이터({s1['label']})", s1["verdict"] == "bad" and bool(s1["findings"][0]["basis"])
+    s2 = c.call("POST", "/api/simulate", {"text": "점심 메뉴 추천해줘"})
+    yield f"업무 시뮬레이터 근거 없음({s2['label']})", s2["verdict"] not in ("ok", "bad")
+    pc = c.call("POST", "/api/precheck", {"kind": "goods", "fields": {"item": "노트북", "amount": "2500000", "quotes": 1, "purchased": True}})
+    yield f"AI 사전점검({pc['label']})", pc["counts"]["bad"] >= 2
+    d = c.call("POST", "/api/check/export?fmt=hwpx", {**pc, "title": "AI 사전점검", "question": "노트북"}, raw=True)
+    yield "점검 결과 내보내기", len(d) > 500
     rv = c.call("GET", "/api/revision/sample")
     yield "규정 개정 시연본", bool(rv)
 
