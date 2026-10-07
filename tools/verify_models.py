@@ -120,7 +120,7 @@ def main():
         proc = subprocess.Popen([sys.executable, str(ROOT / "tools" / "mock_llm.py"), "--port", str(port)],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1.0)
-        a.base_url, a.models = f"http://127.0.0.1:{port}/v1", ["mock-a", "mock-b"]
+        a.base_url, a.models = f"http://127.0.0.1:{port}/v1", ["mock-a", "mock-b", "mock-gemma", "mock-exaone", "mock-gpt-oss"]
     if not a.models:
         ap.error("--models 로 시험할 모델 이름을 2개 이상 주세요 (또는 --mock)")
     apps = [k for k in CHECKS if app_dir(k)]
@@ -129,7 +129,7 @@ def main():
         for m in a.models:
             llm = make_llm(a.provider, a.base_url, m)
             h = llm.health()
-            rows.append((m, "연결 확인", h["ok"], h.get("seconds", 0), h.get("detail", "")))
+            rows.append((m, "연결 확인" + (f" [{h['family']}]" if h.get("family") else ""), h["ok"], h.get("seconds", 0), h.get("detail", "")))
             if not h["ok"]:
                 continue
             for k in apps:
@@ -144,7 +144,7 @@ def main():
     lines = ["# 모델 교체 검증 보고서", "",
              f"- 실행 시각: {time.strftime('%Y-%m-%d %H:%M')}",
              f"- 연결 방식: {a.provider} / 주소: {a.base_url}",
-             f"- 모델: {', '.join(a.models)}" + (" (가짜 모델 서버: 연결 경로 시험용이며 실제 모델 성능과 무관)" if a.mock else ""), "",
+             f"- 모델: {', '.join(a.models)}" + (" (가짜 모델 서버: 연결 경로와 계열별 응답 차이 처리 시험용이며 실제 모델 성능과 무관)" if a.mock else ""), "",
              "| 모델 | 기능 | 결과 | 시간(초) | 비고 |", "|---|---|---|---|---|"]
     for m, name, ok, sec, note in rows:
         lines.append(f"| {m} | {name} | {'통과' if ok else '실패'} | {sec:.1f} | {str(note).replace('|', '/')} |")

@@ -94,21 +94,52 @@ def answer(messages, model):
 
 
 class H(BaseHTTPRequestHandler):
-    def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-        model = body.get("model", "mock-a")
-        content = answer(body.get("messages", []), model)
-        if self.path.endswith("/api/chat"):
-            res = {"model": model, "message": {"role": "assistant", "content": content}, "done": True}
-        else:
-            res = {"id": "mock", "object": "chat.completion", "model": model,
-                   "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}]}
-        data = json.dumps(res, ensure_ascii=False).encode("utf-8")
-        self.send_response(200)
+    """모델 계열별 응답 차이를 흉내 낸다(실제 모델 아님).
+    mock-gemma: system 역할 거부(400) / mock-exaone: 생각 과정 태그를 붙임 /
+    mock-gpt-oss: 토큰 한도가 작으면 생각만 하다 빈 답(finish_reason=length)."""
+    MODELS = ["mock-a", "mock-b", "mock-gemma", "mock-exaone", "mock-gpt-oss"]
+
+    def _send(self, code, obj):
+        data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def do_GET(self):
+        if self.path.endswith("/models"):
+            return self._send(200, {"object": "list", "data": [{"id": m, "object": "model"} for m in self.MODELS]})
+        if self.path.endswith("/api/tags"):
+            return self._send(200, {"models": [{"name": m} for m in self.MODELS]})
+        self._send(404, {"error": "not found"})
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        model = body.get("model", "mock-a")
+        msgs = body.get("messages", [])
+        if model == "mock-gemma" and any(m.get("role") == "system" for m in msgs):
+            return self._send(400, {"error": {"message": "System role not supported"}})
+        if model == "mock-gemma":  # system 이 사용자 메시지에 합쳐져 온 경우
+            u = msgs[0]["content"]
+            msgs = [{"role": "system", "content": u}, *msgs[1:-1], {"role": "user", "content": msgs[-1]["content"] if len(msgs) > 1 else u}]
+        content = answer(msgs, model)
+        finish, reasoning = "stop", None
+        if model == "mock-exaone":
+            content = "<thought>\n요청을 검토합니다.\n</thought>\n" + content
+        if model == "mock-gpt-oss":
+            reasoning = "요청을 단계별로 검토합니다."
+            if int(body.get("max_tokens") or body.get("options", {}).get("num_predict") or 0) < 2000:
+                content, finish = "", "length"
+        if self.path.endswith("/api/chat"):
+            res = {"model": model, "message": {"role": "assistant", "content": content}, "done": True, "done_reason": finish}
+        else:
+            msg = {"role": "assistant", "content": content}
+            if reasoning:
+                msg["reasoning_content"] = reasoning
+            res = {"id": "mock", "object": "chat.completion", "model": model,
+                   "choices": [{"index": 0, "message": msg, "finish_reason": finish}]}
+        self._send(200, res)
 
     def log_message(self, *a):
         pass
@@ -118,5 +149,5 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=18080)
     a = ap.parse_args()
-    print(f"가짜 모델 서버: http://127.0.0.1:{a.port}/v1 (모델 이름: mock-a, mock-b)")
+    print(f"가짜 모델 서버: http://127.0.0.1:{a.port}/v1 (모델 이름: mock-a, mock-b, mock-gemma, mock-exaone, mock-gpt-oss)")
     ThreadingHTTPServer(("127.0.0.1", a.port), H).serve_forever()

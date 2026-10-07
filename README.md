@@ -54,20 +54,39 @@
 - 모델 없이도 모든 기능이 규칙 기반으로 동작합니다. 모델을 연결하면 개정 의도를 개정 작업 목록으로 바꾸고(현행 조문에 없는 글자를 고치려는 제안은 버림), 제정 조문 본문을 다듬습니다. 조 제목·순서와 번호 이동·인용 정정·대비표 계산은 항상 규칙으로 처리해 결과가 모델에 따라 흔들리지 않습니다.
 - 화면 오른쪽 위 **모델 배지**를 누르거나 `config.json`(예시: `config.example.json`)에서 바꿉니다. 코드 수정은 필요 없습니다.
 - 지원 방식
-  - `openai`: OpenAI 호환 API(`/v1/chat/completions`) — vLLM, Ollama(`/v1`), LM Studio, 행정안전부 AI 공통기반 등
+  - `openai`: OpenAI 호환 API(`/v1/chat/completions`) — 행정안전부 AI 공통기반, vLLM, Ollama(`/v1`), LM Studio 등
   - `ollama`: Ollama 기본 API(`/api/chat`)
+- 모델 설정 화면에서 **빠른 설정**(내 PC의 Ollama / AI 공통기반·vLLM)과 **모델 계열**을 고르고, **모델 목록 불러오기**로 서버에 실제 등록된 모델 이름을 받아 고를 수 있습니다.
+
+### 행정안전부 AI 공통기반 지원(예정) 모델 연결
+
+| 모델 계열 | 연결 방법 | 계열별 차이 처리(자동) |
+|---|---|---|
+| 젬마(Gemma, Google) | OpenAI 호환 또는 Ollama 예: `gemma3:4b` | system 역할을 받지 않는 서버면 지시문을 첫 질문에 합쳐 다시 요청 |
+| 라마(Llama, Meta) | OpenAI 호환 또는 Ollama 예: `llama3.1:8b` | 없음(표준 형식) |
+| GPT-OSS (OpenAI 공개 모델) | OpenAI 호환 또는 Ollama 예: `gpt-oss:20b` | 추론형: 토큰 한도를 늘리고, 생각만 하다 답이 비면 한도를 키워 다시 요청 |
+| 엑사원(EXAONE, LG AI연구원) | OpenAI 호환 또는 Ollama 예: `exaone3.5:7.8b` | 답 앞의 생각 과정 태그(`<thought>`, `<think>`) 제거 |
+| 하이퍼클로바X(HyperCLOVA X, 네이버) | OpenAI 호환(AI 공통기반·vLLM 등) | 생각 과정 태그 제거 |
+| 솔라(Solar, 업스테이지) | OpenAI 호환 또는 Ollama 예: `solar-pro` | 없음(표준 형식) |
+
+- 공통: JSON 출력 형식 지정(`response_format`)을 지원하지 않는 서버면 형식 지정 없이 다시 요청하고, 답에 섞인 설명·코드 블록을 걷어 내고 JSON만 읽습니다.
+- 위 Ollama 이름은 예시입니다. AI 공통기반의 실제 주소와 모델 이름은 기관에서 안내받은 값을 쓰거나 **모델 목록 불러오기**로 확인하세요.
+- 앱 코드는 `chat()`·`json()` 두 함수만 쓰므로 새 모델 계열이 추가돼도 앱 코드는 바뀌지 않습니다(`core/llm.py`의 `FAMILIES`에 한 줄 추가).
 - 환경변수로도 바꿀 수 있습니다: `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`. API 키는 파일에 적지 않고 환경변수(기본 `LLM_API_KEY`)로만 읽습니다.
 - 예) Ollama: `ollama pull gemma3:4b` 후 연결 방식 `openai`, 주소 `http://localhost:11434/v1`, 모델 `gemma3:4b`
 - 모델이 낸 결과는 그대로 쓰지 않고 원문과 대조해 검증합니다(근거 위치·현행 조문에 실제로 있는지). 검증에 걸린 제안은 버리고 그 사실을 화면에 표시합니다. 모델 호출이 실패하면 규칙 기반 결과로 계속 진행합니다.
 
 ### 2종 이상 모델 검증 방법
 
+- Windows: [Ollama](https://ollama.com/download)를 설치한 뒤 `모델검증.bat`을 더블클릭하면 젬마(`gemma3:4b`)와 엑사원(`exaone3.5:2.4b`)을 내려받아 주요 기능을 차례로 돌리고 `verify_report.md`를 만듭니다. 다른 모델은 `모델검증.bat llama3.1:8b gpt-oss:20b`처럼 이름을 붙여 실행합니다.
+  - 모델 파일은 기본으로 C 드라이브(사용자 폴더 `.ollama`)에 저장됩니다. 다른 드라이브에 두려면 환경변수 `OLLAMA_MODELS`를 그 폴더로 지정하고 Ollama를 다시 시작하세요.
+- 직접 실행:
 ```
-python tools/verify_models.py --base-url http://localhost:11434/v1 --models gemma3:4b exaone3.5:7.8b
+python tools/verify_models.py --base-url http://localhost:11434/v1 --models gemma3:4b exaone3.5:2.4b
 ```
-모델별·기능별 통과 여부와 걸린 시간을 `verify_report.md`로 남깁니다. `--mock`을 붙이면 출력 습관이 다른 가짜 모델 2종으로 연결 경로만 시험합니다(실제 모델 성능 검증이 아님).
+모델별·기능별 통과 여부와 걸린 시간을 `verify_report.md`로 남깁니다. `--mock`을 붙이면 가짜 모델 서버로 연결 경로와 계열별 응답 차이 처리(system 역할 거부, 생각 과정 태그, 추론형 빈 답)만 시험합니다(실제 모델 성능 검증이 아님).
 
-> 현재 상태: 개발 환경에서 실제 모델을 내려받을 수 없어, 가짜 모델 2종으로 OpenAI 호환·Ollama 두 방식의 연결 경로만 확인했습니다(전 항목 통과). 실제 모델 2종 검증은 위 명령으로 실행해 보고서를 함께 제출하는 것을 권장합니다.
+> 현재 상태: 개발 환경에서는 실제 모델을 내려받을 수 없어 가짜 모델 서버로만 확인했습니다(5종 흉내, 전 항목 통과). 실제 모델 2종 검증은 `모델검증.bat`으로 실행해 보고서를 함께 제출하는 것을 권장합니다.
 
 ## 자료 사용과 원본 보호
 

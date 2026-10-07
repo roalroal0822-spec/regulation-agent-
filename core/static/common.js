@@ -147,6 +147,12 @@ function setupTabs(onChange) {
   const nav = $("nav.tabs");
   const ink = nav && el("span", { class: "tab-ink" });
   if (ink) { nav.prepend(ink); nav.classList.add("inked"); }
+  const h1 = $("header.top h1");
+  if (nav && h1) {
+    nav.prepend(el("span", { class: "nav-title" }, h1.textContent));
+    const stick = () => nav.classList.toggle("stuck", nav.getBoundingClientRect().top <= 0 && window.scrollY > 0);
+    window.addEventListener("scroll", stick, { passive: true }); stick();
+  }
   let cur = -1;
   function moveInk() {
     const b = btns.find(x => x.classList.contains("on"));
@@ -189,19 +195,49 @@ async function setupLLMBadge() {
   badge.addEventListener("click", async () => {
     const info = await refresh();
     const c = info.config;
-    const prov = el("select", {}, ...[["none", "사용 안 함(규칙 기반)"], ["openai", "OpenAI 호환 API (vLLM·Ollama /v1·AI 공통기반 등)"], ["ollama", "Ollama 기본 API"]]
+    const fams = info.families || [];
+    const prov = el("select", {}, ...[["none", "사용 안 함(규칙 기반)"], ["openai", "OpenAI 호환 API (AI 공통기반·vLLM·Ollama /v1 등)"], ["ollama", "Ollama 기본 API"]]
       .map(([v, t]) => el("option", { value: v, selected: c.provider === v }, t)));
-    const base = el("input", { class: "wide", value: c.base_url || "" });
-    const model = el("input", { class: "wide", value: c.model || "" });
+    const base = el("input", { class: "wide", value: c.base_url || "", placeholder: "예: http://localhost:11434/v1 또는 기관에서 안내받은 주소" });
+    const dl = el("datalist", { id: "llm-models" });
+    const model = el("input", { class: "wide", value: c.model || "", list: "llm-models", placeholder: "모델 이름" });
+    const famNote = el("div", { class: "small muted", style: { marginTop: "6px" } });
     const keyenv = el("input", { class: "wide", value: c.api_key_env || "LLM_API_KEY" });
-    const result = el("div", { class: "small muted" });
+    const result = el("div", { class: "small muted", style: { marginTop: "10px" } });
+    const famOf = m => { m = (m || "").toLowerCase(); const rx = { gemma: /gemma/, llama: /llama/, "gpt-oss": /gpt-oss|gpt_oss/, exaone: /exaone/, hyperclovax: /hyperclova|hcx/, solar: /solar/ };
+      return fams.find(f => rx[f.key] && rx[f.key].test(m)); };
+    const showFam = () => { const f = famOf(model.value); famNote.textContent = f ? `인식한 모델 계열: ${f.name} (${f.maker})` : (model.value ? "계열을 알 수 없는 모델도 OpenAI 호환이면 연결할 수 있습니다." : ""); };
+    model.addEventListener("input", showFam); showFam();
+    const preset = (p, url) => { prov.value = p; base.value = url; };
+    const famChips = el("div", { class: "row", style: { gap: "6px" } }, ...fams.map(f =>
+      el("span", { class: "chip", title: f.ollama.length ? "Ollama 예시: " + f.ollama.join(", ") : "OpenAI 호환 서버의 모델 이름을 입력하세요",
+        onclick: () => {
+          if (f.ollama.length) { model.value = f.ollama[0]; }
+          else { model.value = ""; model.focus(); toast(`${f.name}은(는) 서버에 등록된 이름을 입력하거나 목록을 불러오세요`); }
+          showFam();
+        } }, f.name)));
+    const loadModels = el("button", { onclick: async () => {
+      loadModels.disabled = true;
+      try {
+        const r = await api("POST", "/api/llm/models", { provider: prov.value, base_url: base.value, api_key_env: keyenv.value });
+        dl.replaceChildren(...r.models.map(m => el("option", { value: m })));
+        result.textContent = r.models.length ? `서버 모델 ${r.models.length}개: ` + r.models.map(m => { const f = famOf(m); return f ? `${m} (${f.name})` : m; }).join(", ") : "서버에 등록된 모델이 없습니다.";
+      } catch (e) { result.textContent = "목록을 받지 못했습니다: " + e.message; }
+      loadModels.disabled = false;
+    }, style: { flex: "none", whiteSpace: "nowrap" } }, "모델 목록 불러오기");
     modal("모델 연결 설정",
-      el("p", { class: "small muted" }, "모델을 바꿔도 기능은 그대로입니다. 모델 없이도 규칙 기반으로 동작합니다. API 키는 화면에 입력하지 않고 환경변수로만 읽습니다."),
+      el("p", { class: "small muted" }, "특정 모델에 묶이지 않습니다. 모델을 바꿔도 기능은 그대로이고, 모델 없이도 규칙 기반으로 동작합니다. API 키는 화면에 입력하지 않고 환경변수로만 읽습니다."),
+      el("label", { class: "f" }, "빠른 설정"),
+      el("div", { class: "row", style: { gap: "6px" } },
+        el("button", { class: "small", onclick: () => preset("openai", "http://localhost:11434/v1") }, "내 PC의 Ollama"),
+        el("button", { class: "small", onclick: () => { preset("openai", ""); base.focus(); } }, "행정안전부 AI 공통기반·vLLM (OpenAI 호환)"),
+        el("button", { class: "small", onclick: () => preset("none", base.value) }, "모델 사용 안 함")),
       el("label", { class: "f" }, "연결 방식"), prov,
-      el("label", { class: "f" }, "주소 (예: http://localhost:11434/v1)"), base,
-      el("label", { class: "f" }, "모델 이름 (예: gemma3:4b, exaone3.5:7.8b, llama3.1:8b, gpt-oss:20b)"), model,
+      el("label", { class: "f" }, "주소"), base,
+      el("label", { class: "f" }, "모델 계열 (AI 공통기반 지원·지원 예정 모델)"), famChips,
+      el("label", { class: "f" }, "모델 이름"), el("div", { class: "row", style: { flexWrap: "nowrap" } }, model, loadModels), dl, famNote,
       el("label", { class: "f" }, "API 키 환경변수 이름 (키가 필요한 경우)"), keyenv,
-      el("div", { class: "row", style: { marginTop: "12px" } },
+      el("div", { class: "row", style: { marginTop: "16px" } },
         el("button", { class: "primary", onclick: async () => {
           await api("POST", "/api/llm", { provider: prov.value, base_url: base.value, model: model.value, api_key_env: keyenv.value });
           await refresh(); toast("저장했습니다");
@@ -209,7 +245,7 @@ async function setupLLMBadge() {
         el("button", { onclick: async () => {
           result.textContent = "확인 중…";
           const r = await api("POST", "/api/llm/test");
-          result.textContent = (r.ok ? "연결 성공: " : "연결 실패: ") + r.label + " / " + (r.detail || "") + (r.seconds ? ` (${r.seconds}초)` : "");
+          result.textContent = (r.ok ? "연결 성공: " : "연결 실패: ") + r.label + (r.family ? ` [${r.family}]` : "") + " / " + (r.detail || "") + (r.seconds ? ` (${r.seconds}초)` : "");
         } }, "연결 확인")),
       result);
   });
