@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>규정 제·개정 에이전트</title>
+<link rel="stylesheet" href="/core/common.css">
+<style>
+  .agent-steps { list-style: none; padding: 0; margin: 8px 0; }
+  .agent-steps li { padding: 6px 0 6px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .agent-steps li::before { content: "✓"; position: absolute; left: 4px; color: var(--ok); font-weight: 700; }
+  .art { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; background: #fff; }
+  .art textarea { width: 100%; min-height: 70px; font-family: inherit; }
+  .art .head { display: flex; gap: 6px; align-items: center; }
+  .ph { background: #fff6d6; border-bottom: 2px solid #e0a800; }
+  .op { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 4px 0; background: #fff; }
+  .op .d { flex: 1; }
+  table.cmp td { vertical-align: top; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+  table.cmp2 td { width: 50%; }
+  pre.law { white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.7; background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 420px; overflow: auto; margin: 0; }
+  .steps2 { list-style: none; padding: 0; margin: 0; }
+  .steps2 li { border-left: 3px solid var(--line); padding: 6px 0 12px 14px; position: relative; }
+  .steps2 li::before { content: ""; position: absolute; left: -8px; top: 9px; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 3px solid var(--line); }
+  .steps2 li.doing { border-left-color: var(--brand); }
+  .steps2 li.doing::before { border-color: var(--brand); background: var(--brand); }
+  .steps2 li.done::before, .steps2 li.skipped::before { border-color: var(--ok); background: var(--ok); }
+  .steps2 li.done, .steps2 li.skipped { opacity: .7; }
+  .caselist .c { padding: 8px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; cursor: pointer; background: #fff; }
+  .caselist .c.on { border-color: var(--brand); box-shadow: 0 0 0 2px #dbe7ff; }
+  .lv-오류 { color: var(--bad); font-weight: 700; }
+  .lv-주의 { color: #b26a00; font-weight: 700; }
+  .lv-참고 { color: var(--muted); }
+  .lv-확인 { color: var(--ok); font-weight: 700; }
+  .doc-preview h1, .doc-preview h2, .doc-preview h3 { margin: 10px 0 6px; }
+  .doc-preview p { margin: 4px 0; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>규정 제·개정 에이전트</h1>
+    <div class="sub">제정·개정 초안, 신구조문대비표, 인용 정정, 상위법 영향 분석, 절차 안내까지</div>
+  </div>
+  <div class="spacer"></div>
+  <span id="org-label" class="small muted"></span>
+  <span id="llm-badge" class="llm-badge">모델: …</span>
+</header>
+<nav class="tabs">
+  <button data-tab="agent">에이전트</button>
+  <button data-tab="enact">제정</button>
+  <button data-tab="amend">개정</button>
+  <button data-tab="impact">상위법 영향</button>
+  <button data-tab="lint">전체 점검</button>
+  <button data-tab="cases">진행 관리</button>
+  <button data-tab="library">규정집</button>
+  <button data-tab="settings">설정·기록</button>
+</nav>
+<main>
+  <section class="tab" id="tab-agent">
+    <div class="panel">
+      <h2>무엇을 할까요?</h2>
+      <p class="small muted">한 문장으로 적으면 대상 규정을 찾고, 초안·신구조문대비표·인용 정정 목록을 만든 뒤 다음 절차까지 안내합니다.</p>
+      <textarea id="agent-text" class="wide" style="width:100%;min-height:64px;font-size:15px" placeholder="예: 체육시설 운영 규정에서 대관 사용료 납부 기한을 7일에서 5일로 줄이고, 제8조 다음에 사용허가 취소에 관한 조문을 신설해줘"></textarea>
+      <div class="row" style="margin-top:8px"><button class="primary" id="agent-run">실행</button><span class="row small" id="agent-examples"></span></div>
+    </div>
+    <div id="agent-out"></div>
+  </section>
+
+  <section class="tab" id="tab-enact" hidden>
+    <div class="panel">
+      <h2>제정: 새 규정·지침 초안</h2>
+      <div class="grid2">
+        <div>
+          <label class="f">규정 이름</label><input id="en-title" class="wide" placeholder="예: 체육시설 정기대관 운영 지침">
+          <label class="f">제정 목적</label><textarea id="en-purpose" class="wide" style="width:100%;min-height:70px" placeholder="예: 체육시설을 매주 같은 요일·시간에 정기적으로 사용하려는 단체의 정기대관 신청, 대상자 선정, 사용료 납부·감면·반환과 취소 기준을 정하려고 함"></textarea>
+          <label class="f">상위법 위임 조항</label>
+          <div class="row"><select id="en-law"></select><select id="en-art"></select><select id="en-para"></select></div>
+          <div class="small muted" id="en-deleg-text" style="margin-top:4px"></div>
+          <details style="margin-top:6px"><summary class="small">규정집에 없는 조항이면 직접 입력</summary>
+            <input id="en-deleg-free" class="wide" placeholder="예: 「○○법」 제10조: ○○에 필요한 사항은 기관장이 정한다."></details>
+        </div>
+        <div>
+          <label class="f">담을 내용(조문 체계)</label>
+          <div id="en-matters" class="row" style="flex-wrap:wrap;gap:6px"></div>
+          <p class="small muted">목적에 쓴 말로 자동 선택됩니다. 필요한 항목을 더 고르세요.</p>
+          <div class="row" style="margin-top:10px"><button class="primary" id="en-run">초안 만들기</button><button id="en-sample">예시 채우기</button></div>
+        </div>
+      </div>
+    </div>
+    <div id="en-out"></div>
+  </section>
+
+  <section class="tab" id="tab-amend" hidden>
+    <div class="panel">
+      <h2>개정: 개정 의도 → 조문 수정안·신구조문대비표</h2>
+      <div class="row"><label class="small">개정할 규정</label><select id="am-reg"></select><button id="am-view" class="small">현행 조문 보기</button></div>
+      <label class="f">개정 의도</label>
+      <textarea id="am-intent" class="wide" style="width:100%;min-height:64px" placeholder="예: 대관 사용료 납부 기한을 7일에서 5일로 줄이고, 제8조 다음에 사용허가 취소에 관한 조문을 신설한다"></textarea>
+      <div class="row small" id="am-examples" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:8px"><button class="primary" id="am-plan">개정 작업 만들기</button></div>
+    </div>
+    <div id="am-ops"></div>
+    <div id="am-out"></div>
+  </section>
+
+  <section class="tab" id="tab-impact" hidden>
+    <div class="panel">
+      <h2>상위법 개정 영향 분석</h2>
+      <p class="small muted">상위 법령(조례·법령)의 개정 후 본문을 넣으면 조문을 비교하고, 그 조문을 인용하거나 같은 내용을 옮겨 적은 기관 규정·별표·서식을 찾아 개정 후보를 제시합니다.</p>
+      <div class="row"><label class="small">상위 법령</label><select id="im-law"></select></div>
+      <div class="row" style="margin-top:8px"><input type="file" id="im-file"><button class="primary" id="im-run">개정본 파일로 분석</button><button id="im-sample">시연용 개정본으로 분석</button></div>
+      <details style="margin-top:6px"><summary class="small">개정 후 본문 붙여넣기</summary><textarea id="im-text" style="width:100%;min-height:120px"></textarea><button id="im-run-text">붙여넣은 본문으로 분석</button></details>
+    </div>
+    <div id="im-out"></div>
+  </section>
+
+  <section class="tab" id="tab-lint" hidden>
+    <div class="panel">
+      <h2>규정집 전체 점검</h2>
+      <p class="small muted">없는 조·삭제된 조 인용, 조·항·호 번호 오류, 규정명 표기, 정의한 용어와 다른 말, 규정 사이 기한 충돌, 서식·별표 누락을 찾습니다.</p>
+      <div class="row"><button class="primary" id="lint-run">점검하기</button><span id="lint-export"></span></div>
+    </div>
+    <div id="lint-out"></div>
+  </section>
+
+  <section class="tab" id="tab-cases" hidden>
+    <div class="grid2" style="grid-template-columns: 300px 1fr">
+      <div class="panel"><h2>제·개정 건</h2><div id="case-list" class="caselist"></div></div>
+      <div id="case-detail"><div class="panel empty">왼쪽에서 건을 고르세요. 제정·개정 화면이나 에이전트에서 건을 등록하면 여기에 나타납니다.</div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-library" hidden>
+    <div class="panel">
+      <div class="row"><h2 style="flex:1;margin:0">규정집</h2><button id="lib-sample">시연용 모의 규정집 다시 불러오기</button></div>
+      <p class="small muted">올린 파일은 작업 폴더(data/library)에 사본으로 저장되고, 원본 파일은 바꾸지 않습니다. 지원 형식: hwpx, hwp, docx, pdf, txt, md. 서식 파일 이름은 "[소속 규정 이름] 별지1 서식이름.hwpx" 형식으로 하면 인용 탐지에 쓰입니다.</p>
+    </div>
+    <div class="grid3" id="lib-cols"></div>
+  </section>
+
+  <section class="tab" id="tab-settings" hidden>
+    <div class="grid2">
+      <div class="panel">
+        <h2>기관 설정</h2>
+        <div id="set-form"></div>
+        <button class="primary" id="set-save" style="margin-top:10px">저장</button>
+      </div>
+      <div class="panel">
+        <h2>제·개정 절차 (규정집에서 읽음)</h2>
+        <div id="proc-view"></div>
+      </div>
+    </div>
+    <div class="panel"><h2>작업 기록</h2><div id="hist"></div></div>
+  </section>
+</main>
+<script src="/core/common.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
