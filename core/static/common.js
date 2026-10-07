@@ -144,9 +144,28 @@ async function showSource(s, contextUrl) {
 // 탭 전환
 function setupTabs(onChange) {
   const btns = $$("nav.tabs button");
+  const nav = $("nav.tabs");
+  const ink = nav && el("span", { class: "tab-ink" });
+  if (ink) { nav.prepend(ink); nav.classList.add("inked"); }
+  let cur = -1;
+  function moveInk() {
+    const b = btns.find(x => x.classList.contains("on"));
+    if (ink && b) { ink.style.left = b.offsetLeft + "px"; ink.style.width = b.offsetWidth + "px"; }
+  }
+  window.addEventListener("resize", moveInk);
   function go(id) {
+    const idx = btns.findIndex(b => b.dataset.tab === id);
+    const dir = cur < 0 ? "" : idx > cur ? "from-right" : idx < cur ? "from-left" : "";
+    cur = idx;
     btns.forEach(b => b.classList.toggle("on", b.dataset.tab === id));
-    $$("section.tab").forEach(s => s.hidden = s.id !== "tab-" + id);
+    moveInk();
+    if (btns[idx] && btns[idx].scrollIntoView) btns[idx].scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    $$("section.tab").forEach(s => {
+      s.classList.remove("from-right", "from-left");
+      s.hidden = s.id !== "tab-" + id;
+      if (!s.hidden && dir) { void s.offsetWidth; s.classList.add(dir); }
+    });
+    if (nav && dir && window.scrollY > nav.offsetTop) window.scrollTo({ top: nav.offsetTop, behavior: "smooth" });
     try { localStorage.setItem(location.pathname + ":tab", id); } catch (e) {}
     onChange && onChange(id);
   }
@@ -204,3 +223,19 @@ function busy(btn, on, text) {
 }
 
 document.addEventListener("DOMContentLoaded", setupLLMBadge);
+
+// 스크롤하면 카드가 떠오르듯 나타남(새로 그려지는 카드 포함)
+(function setupReveal() {
+  if (!("IntersectionObserver" in window)) return;
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }), { rootMargin: "0px 0px -40px 0px" });
+  const watch = root => (root.matches && root.matches("main .panel") ? [root] : [])
+    .concat(root.querySelectorAll ? [...root.querySelectorAll("main .panel")] : [])
+    .forEach(p => { if (!p.classList.contains("rv") && !p.closest(".modal-bg")) { p.classList.add("rv"); io.observe(p); } });
+  document.addEventListener("DOMContentLoaded", () => {
+    watch(document);
+    new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 && watch(n))))
+      .observe(document.body, { childList: true, subtree: true });
+  });
+})();

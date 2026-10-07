@@ -55,8 +55,28 @@ nav.tabs button:hover { color: var(--ink); background: rgba(0,0,0,.04); border: 
 nav.tabs button.on { color: #fff; background: var(--ink); font-weight: 600; }
 
 main { padding: 28px 24px 96px; max-width: 1248px; margin: 0 auto; }
-section.tab:not([hidden]) { animation: fadein .35s cubic-bezier(.2,.7,.2,1); }
-@keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 움직임: 탭은 슬라이드처럼 좌우로, 카드는 스크롤하면 떠오르듯 */
+:root { --ease: cubic-bezier(.22,.8,.2,1); }
+nav.tabs .tab-ink { position: absolute; top: 10px; height: calc(100% - 20px); left: 0; width: 0; border-radius: 99px;
+  background: var(--ink); z-index: 0; transition: left .45s var(--ease), width .45s var(--ease); pointer-events: none; }
+nav.tabs button { position: relative; z-index: 1; }
+nav.tabs.inked button.on { background: transparent; }
+section.tab:not([hidden]) { animation: fadein .45s var(--ease); }
+section.tab.from-right:not([hidden]) { animation: slide-r .55s var(--ease); }
+section.tab.from-left:not([hidden]) { animation: slide-l .55s var(--ease); }
+@keyframes fadein { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes slide-r { from { opacity: 0; transform: translateX(80px); } to { opacity: 1; transform: none; } }
+@keyframes slide-l { from { opacity: 0; transform: translateX(-80px); } to { opacity: 1; transform: none; } }
+.rv { opacity: 0; transform: translateY(36px) scale(.985); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.rv.in { opacity: 1; transform: none; }
+header.top .mark, header.top h1, header.top .sub { animation: rise .9s var(--ease) both; }
+header.top h1 { animation-delay: .08s; }
+header.top .sub { animation-delay: .18s; }
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .rv { opacity: 1; transform: none; }
+}
 
 /* 카드 */
 .panel { background: var(--panel); border: 0; border-radius: var(--radius); padding: 28px 30px; margin-bottom: 20px; box-shadow: var(--shadow); }
@@ -169,14 +189,14 @@ details summary { cursor: pointer; color: var(--brand); }
 .row > label:has(> input[type="radio"]:checked) > input { accent-color: #fff; }
 
 /* 판정 표시 (서무비서 시뮬레이터·사전점검) */
-.verdict { display: flex; align-items: center; gap: 18px; padding: 22px 24px; border-radius: var(--radius); margin-bottom: 18px; }
+.verdict { animation: pop .6s var(--ease) both; display: flex; align-items: center; gap: 18px; padding: 22px 24px; border-radius: var(--radius); margin-bottom: 18px; }
 .verdict .big { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
 .verdict.ok { background: var(--ok-soft); color: var(--ok); }
 .verdict.warn { background: var(--warn-soft); color: var(--warn); }
 .verdict.bad { background: var(--bad-soft); color: var(--bad); }
 .verdict.gray { background: #f0f0f2; color: var(--muted); }
 .verdict .desc { color: var(--ink); font-size: 15px; }
-.finding { padding: 16px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 28px 1fr; gap: 12px; }
+.finding { animation: rise .6s var(--ease) both; padding: 16px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 28px 1fr; gap: 12px; }
 .finding:first-child { border-top: 0; }
 .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 5px; }
 .dot.ok { background: #30d158; } .dot.warn { background: #ff9f0a; } .dot.bad { background: #ff3b30; } .dot.gray { background: #aeaeb2; }
@@ -204,3 +224,7 @@ details summary { cursor: pointer; color: var(--brand); }
   body { background: #fff; }
   .panel { box-shadow: none; }
 }
+@keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+.finding:nth-of-type(2) { animation-delay: .08s; } .finding:nth-of-type(3) { animation-delay: .16s; }
+.finding:nth-of-type(4) { animation-delay: .24s; } .finding:nth-of-type(5) { animation-delay: .32s; }
+.finding:nth-of-type(n+6) { animation-delay: .4s; }
