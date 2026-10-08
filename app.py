@@ -37,7 +37,7 @@ LIB_ROOT = store.path("library")
 app = App(HERE / "static")
 webcommon.register(app, cfg, llm, "규정 제·개정 에이전트", VERSION)
 
-DEFAULT_SETTINGS = {"org_name": "가람구시설관리공단", "head": "이사장", "dept": "기획예산팀",
+DEFAULT_SETTINGS = {"org_name": "공공기관", "head": "이사장", "dept": "기획예산팀",
                     "phone": "【연락처】", "email": "【전자우편】", "terms": lint.DEFAULT_TERMS}
 STATE = {"lib": None, "impact": None}
 

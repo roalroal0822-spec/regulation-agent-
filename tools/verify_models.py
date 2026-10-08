@@ -93,7 +93,7 @@ def check_gyujeong(llm):
     import amend
     import enact
     from library import Library
-    lib = Library(d / "sample_data" / "library", "가람구시설관리공단").load()
+    lib = Library(d / "sample_data" / "library", "공공기관").load()
     e = lib.by_name("체육시설 운영 규정")
     res = []
     t = time.time()
@@ -108,7 +108,7 @@ def check_gyujeong(llm):
     up = lib.regs("upper")[0]
     art = up.reg.get("4")
     deleg = {"law": up.short, "label": "제4조제2항", "text": art.paras[1].text}
-    dr = enact.make(lib, "체육시설 정기대관 운영 지침", "정기대관 신청, 대상자 선정, 사용료 납부와 취소 기준을 정하려고 함", deleg, None, "이사장", "가람구시설관리공단", llm)
+    dr = enact.make(lib, "체육시설 정기대관 운영 지침", "정기대관 신청, 대상자 선정, 사용료 납부와 취소 기준을 정하려고 함", deleg, None, "이사장", "공공기관", llm)
     ok = dr["engine"] == "모델" and len(dr["articles"]) >= 5 and "제1조(목적)" in dr["reg_text"]
     res.append(("규정 제·개정: 제정 조문 본문 작성", ok, time.time() - t, f"사용 결과: {dr['engine']}, 조 {len(dr['articles'])}개"))
     sys.path.remove(str(d))

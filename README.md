@@ -90,7 +90,7 @@ python tools/verify_models.py --base-url http://localhost:11434/v1 --models gemm
 
 ## 자료 사용과 원본 보호
 
-- 함께 넣은 `sample_data/`는 가상의 기관 **가람구시설관리공단** 기준으로 지어낸 모의자료입니다. 실제 기관·인물·연락처와 관계없습니다. (`tools/samples_gyujeong.py`로 다시 만들 수 있습니다)
+- 함께 넣은 `sample_data/`는 가상의 **공공기관** 기준으로 지어낸 모의자료입니다. 실제 기관·인물·연락처와 관계없습니다. (`tools/samples_gyujeong.py`로 다시 만들 수 있습니다)
 - 투입한 원본 파일은 읽기만 합니다. 규정집에 올린 파일은 작업 폴더(data/library)에 사본으로 저장하고, 개정 반영·서식 정정·상위 법령 교체 때마다 이전 판을 data/archive에 보관합니다.
 - 작업 데이터와 산출물은 `data/` 폴더(설정 `data_dir` 또는 환경변수 `APP_DATA_DIR`로 변경)에만 저장합니다. 데이터베이스 설치가 필요 없습니다.
 
