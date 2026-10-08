@@ -469,19 +469,27 @@ def llm_ops(llm, entry, intent):
     return ops, notes, eff
 
 
+def _op_key(o):
+    return (o["type"], o.get("article") or o.get("after") or o.get("after_find"))
+
+
 def plan(intent, entry, lib, llm=None, head="이사장"):
-    """규칙으로 읽고, 모델이 연결되어 있으면 모델 제안도 받아 검증된 쪽을 쓴다."""
+    """규칙으로 읽고, 모델이 연결되어 있으면 모델 제안 중 현행 조문과 맞는 것만 쓰고 빈 부분은 규칙 결과로 채운다."""
     ops, notes, eff = parse_intent(intent, entry, lib, head)
     engine = "규칙"
     if llm is not None and llm.enabled:
         try:
             m_ops, m_notes, m_eff = llm_ops(llm, entry, intent)
-            if m_ops and len(m_ops) >= len(ops):
-                # 모델이 만든 신설 조문이 비어 있으면 규칙 쪽 본문을 쓴다
-                ops, notes, eff = m_ops, m_notes + [f"모델({llm.label}) 제안을 현행 조문과 대조해 사용했습니다."], m_eff or eff
-                engine = "모델"
+            if m_ops:
+                # 모델이 다루지 않은 조문의 규칙 작업은 그대로 보탠다
+                have = {_op_key(o) for o in m_ops}
+                fill = [o for o in ops if _op_key(o) not in have]
+                ops, eff = m_ops + fill, m_eff or eff
+                notes = m_notes + [f"모델({llm.label}) 제안 {len(m_ops)}개를 현행 조문과 대조해 사용했습니다."
+                                   + (f" 모델이 다루지 않은 {len(fill)}개는 규칙 결과로 채웠습니다." if fill else "")]
+                engine = "모델" if not fill else "모델+규칙"
             else:
-                notes.append(f"모델 제안이 규칙 결과보다 적거나 검증되지 않아 규칙 결과를 썼습니다. ({'; '.join(m_notes)[:200]})")
+                notes.append(f"모델 제안 중 현행 조문과 맞는 것이 없어 규칙 결과를 썼습니다. ({'; '.join(m_notes)[:200]})")
         except LLMError as e:
             notes.append(f"모델 호출 실패로 규칙 결과를 썼습니다: {e}")
     return {"ops": ops, "notes": notes, "effective": eff, "engine": engine}

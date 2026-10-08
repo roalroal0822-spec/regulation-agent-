@@ -100,7 +100,7 @@ def check_gyujeong(llm):
     p = amend.plan("대관 사용료 납부 기한을 7일에서 5일로 줄이고, 제8조 다음에 사용허가 취소에 관한 조문을 신설한다", e, lib, llm)
     r = amend.apply(e, p["ops"], "branch", None, lib)
     a8 = r["reg"].get("8")
-    ok = p["engine"] == "모델" and a8 is not None and "5일 이내" in a8.plain and any(k.startswith("8의") for k in r["inserted"])
+    ok = p["engine"].startswith("모델") and a8 is not None and "5일 이내" in a8.plain and any(k.startswith("8의") for k in r["inserted"])
     dropped = sum(1 for n in p["notes"] if "제외" in n)
     res.append(("규정 제·개정: 개정 의도 → 개정 작업(현행 조문 대조 검증)", ok, time.time() - t,
                 f"사용 결과: {p['engine']}, 작업 {len(p['ops'])}개, 검증에서 걸러진 제안 {dropped}개"))
