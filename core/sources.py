@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .loaders import SUPPORTED, load_bytes, load_folder
+from .loaders import SUPPORTED, load_bytes, load_folder, skip_reason
 
 
 def safe_parts(path):
@@ -91,7 +91,7 @@ class DocSystemSource:
         for meta in listing.get("documents", []):
             fn = meta.get("filename", "")
             if Path(fn).suffix.lower() not in SUPPORTED:
-                skipped.append({"file": fn, "reason": "지원하지 않는 형식"})
+                skipped.append({"file": fn, "reason": skip_reason(Path(fn).suffix)})
                 continue
             content = self._get(f"{self.base}/documents/{urllib.parse.quote(str(meta['id']))}/content")
             rel = f"{meta.get('category', '문서시스템')}/{fn}"

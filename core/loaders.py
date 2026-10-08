@@ -1,6 +1,6 @@
 """여러 형식의 문서를 읽어 '블록(위치가 붙은 문장 단위)'으로 바꾼다.
 
-지원 형식: 한글(.hwpx, .hwp), PDF, 엑셀(.xlsx/.xlsm), 워드(.docx), 메일(.eml), 텍스트(.txt/.md/.csv)
+지원 형식: 한글(.hwpx, .hwp), PDF, 엑셀(.xlsx/.xlsm), 워드(.docx), 파워포인트(.pptx), 메일(.eml), 텍스트(.txt/.md/.csv)
 원본 파일은 읽기만 하고 절대 수정·이동·삭제하지 않는다.
 """
 import csv
@@ -16,7 +16,13 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-SUPPORTED = {".hwpx", ".hwp", ".pdf", ".xlsx", ".xlsm", ".docx", ".eml", ".txt", ".md", ".csv"}
+SUPPORTED = {".hwpx", ".hwp", ".pdf", ".xlsx", ".xlsm", ".docx", ".pptx", ".eml", ".txt", ".md", ".csv"}
+
+
+def skip_reason(ext):
+    if ext.lower() == ".ppt":
+        return "파워포인트 97~2003 형식(.ppt)은 읽지 못합니다. PowerPoint에서 .pptx로 저장해 넣어 주세요"
+    return "지원하지 않는 형식"
 
 
 @dataclass
@@ -220,6 +226,54 @@ def _read_docx(data, name):
     return _emit_xml(items, tables, Path(name).stem), tables
 
 
+def _pptx_slides(z):
+    """발표 순서대로 슬라이드 파일 경로를 낸다(presentation.xml의 sldIdLst 순서)."""
+    names = set(z.namelist())
+    try:
+        rels = ET.fromstring(z.read("ppt/_rels/presentation.xml.rels"))
+        target = {r.get("Id"): "ppt/" + r.get("Target").lstrip("/").removeprefix("ppt/") for r in rels}
+        pres = ET.fromstring(z.read("ppt/presentation.xml"))
+        order = [target.get(e.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"))
+                 for e in pres.iter() if _local(e.tag) == "sldId"]
+        order = [o for o in order if o in names]
+        if order:
+            return order
+    except (KeyError, ET.ParseError):
+        pass
+    return sorted((n for n in names if re.match(r"ppt/slides/slide\d+\.xml$", n)),
+                  key=lambda n: int(re.findall(r"\d+", n)[-1]))
+
+
+def _read_pptx(data, name):
+    z = zipfile.ZipFile(io.BytesIO(data))
+    names = set(z.namelist())
+    out, tables = [], []
+    for si, path in enumerate(_pptx_slides(z), 1):
+        sub = []
+        items = list(_xml_paragraphs(ET.fromstring(z.read(path)), "p", "t", "tbl", "tr", "tc"))
+        for loc, text in _emit_xml(items, sub, f"{Path(name).stem} 슬라이드{si}"):
+            out.append((f"슬라이드 {si} {loc}", text))
+        for t in sub:
+            t["loc_prefix"] = f"슬라이드 {si} " + t["loc_prefix"]
+            t["row_locs"] = [f"슬라이드 {si} " + x for x in t["row_locs"]]
+        tables.extend(sub)
+        # 발표자 메모: 슬라이드 rels에서 notesSlide를 찾는다
+        rel = path.replace("slides/", "slides/_rels/") + ".rels"
+        if rel in names:
+            for r in ET.fromstring(z.read(rel)):
+                if r.get("Type", "").endswith("/notesSlide"):
+                    npath = "ppt/" + r.get("Target").replace("../", "")
+                    if npath in names:
+                        ni = 0
+                        for e in ET.fromstring(z.read(npath)).iter():
+                            if _local(e.tag) == "p":
+                                t = _clean("".join(x.text or "" for x in e.iter() if _local(x.tag) == "t"))
+                                if t and not t.isdigit():  # 쪽 번호 자리 제외
+                                    ni += 1
+                                    out.append((f"슬라이드 {si} 메모 {ni}", t))
+    return out, tables
+
+
 # HWP 5.0 바이너리: 레코드 구조에서 문단 텍스트(HWPTAG_PARA_TEXT=67)만 꺼낸다.
 _HWP_CHAR_CTRL = {0, 10, 13, 24, 25, 26, 27, 28, 29, 30, 31}
 
@@ -355,7 +409,7 @@ def _read_eml(data, name):
 
 READERS = {
     ".txt": _read_text, ".md": _read_text, ".csv": _read_csv,
-    ".hwpx": _read_hwpx, ".hwp": _read_hwp, ".docx": _read_docx,
+    ".hwpx": _read_hwpx, ".hwp": _read_hwp, ".docx": _read_docx, ".pptx": _read_pptx,
     ".pdf": _read_pdf, ".xlsx": _read_xlsx, ".xlsm": _read_xlsx,
 }
 
@@ -400,7 +454,7 @@ def load_folder(folder):
     docs, skipped = [], []
     for rel, p in iter_folder(folder):
         if p.suffix.lower() not in SUPPORTED:
-            skipped.append({"file": rel, "reason": "지원하지 않는 형식"})
+            skipped.append({"file": rel, "reason": skip_reason(p.suffix)})
             continue
         with open(p, "rb") as f:  # 읽기 전용으로만 연다
             data = f.read()

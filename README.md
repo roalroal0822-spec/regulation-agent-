@@ -115,7 +115,7 @@ procedure.py        기능 로직
 docs.py             기능 로직
 drafting.py         기능 로직
 static/             화면(HTML·JS, 외부 라이브러리 없음)
-core/               공통 모듈: 문서 읽기(hwpx·hwp·docx·pdf·xlsx·eml·txt), 검색, 모델 연결, 문서 내보내기(hwpx·docx·md), 저장소, 웹 서버
+core/               공통 모듈: 문서 읽기(hwpx·hwp·docx·pptx·pdf·xlsx·eml·txt), 검색, 모델 연결, 문서 내보내기(hwpx·docx·md), 저장소, 웹 서버
 sample_data/        모의자료
 tools/              모델 검증 도구, 가짜 모델 서버, 모의자료 생성기
 tests/              구동 점검
