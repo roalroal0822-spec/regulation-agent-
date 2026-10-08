@@ -264,3 +264,39 @@ nav.tabs.stuck { background: rgba(255, 255, 255, .78); }
   header.top h1 { font-size: 38px; }
 }
 @media print { .foot { display: none; } }
+
+/* ── 정부 서비스풍 테마: 정부 누리집 디자인 시스템(KRDS)의 색 체계를 참고. 정부 상징·부처 로고는 쓰지 않는다 ── */
+:root {
+  --bg: #f4f5f6; --ink: #1e2124; --muted: #58616a; --line: #e6e8ea; --line-strong: #cdd1d5;
+  --brand: #256ef4; --brand-strong: #0b50d0; --brand-soft: #ecf2fe; --navy: #052b57; --navy-2: #063a74;
+  --radius: 12px; --radius-sm: 8px;
+  --focus: 0 0 0 3px rgba(37, 110, 244, .3);
+}
+::selection { background: #d8e5fd; }
+.gov-strip { background: var(--navy); color: rgba(255,255,255,.78); height: 32px; font-size: 12.5px; }
+.gov-strip b { color: #fff; font-weight: 600; }
+.gov-strip .sep { opacity: .35; }
+.masthead { background: #fff; border-bottom: 1px solid var(--line); padding: 0 max(24px, calc((100vw - 1200px) / 2));
+  height: 64px; display: flex; align-items: center; gap: 12px; }
+.masthead .ms-mark { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--brand), var(--navy-2));
+  display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; letter-spacing: -.02em; flex: none; }
+.masthead b { font-size: 17px; font-weight: 700; color: var(--ink); letter-spacing: -.02em; }
+.masthead .ms-sub { color: var(--muted); font-size: 13px; padding-left: 12px; margin-left: 2px; border-left: 1px solid var(--line-strong); }
+header.top { background: linear-gradient(180deg, #eef3fd 0%, var(--bg) 100%); padding-top: 64px; }
+header.top .mark { background: linear-gradient(180deg, var(--brand), var(--navy-2)); box-shadow: 0 8px 24px rgba(11, 80, 208, .25); border-radius: 14px; }
+header.top .eyebrow { color: var(--brand-strong); }
+nav.tabs { background: rgba(255, 255, 255, .88); border-bottom: 1px solid var(--line); }
+nav.tabs button { border-radius: 8px; }
+nav.tabs button.on, nav.tabs .tab-ink { background: var(--navy-2); }
+nav.tabs button.on { color: #fff; }
+button, .btn { border-radius: 8px; }
+button.primary { background: var(--brand); border-color: var(--brand); }
+.chip { border-radius: 8px; }
+.chip:hover { border-color: var(--brand); color: var(--brand-strong); }
+.row > label:has(> input[type="radio"]:checked) { border-color: var(--navy-2); background: var(--navy-2); }
+.row > label:has(> input[type="radio"]) { border-radius: 8px; }
+.cal .m.now { box-shadow: 0 0 0 2px var(--brand); }
+.foot { max-width: none; border-top: 0; background: #e9ecef; color: var(--muted); padding: 22px max(24px, calc((100vw - 1200px) / 2)) 40px; }
+@media (max-width: 720px) { .masthead .ms-sub, .gov-strip span { display: none; } }
+.panel { border-radius: 16px; }
+@media print { .masthead { display: none; } }
