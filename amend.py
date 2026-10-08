@@ -12,6 +12,7 @@
 """
 import copy
 import re
+from datetime import date
 
 from core import regparse
 from core.llm import LLMError
@@ -23,16 +24,43 @@ from library import RefFinder, norm_name
 Q = r"(?:\"[^\"]+\"|'[^']+'|“[^”]+”|‘[^’]+’|「[^」]+」)"
 RX_ART = re.compile(r"제(\d+)조(?:의(\d+))?(?:\s*제(\d+)항)?(?:\s*제(\d+)호)?")
 RX_REPL = re.compile(rf"(?P<a>{Q}|[^\s'\"“”‘’]+?)\s*에서\s*(?P<b>{Q}|[^\s'\"“”‘’]+?)\s*(?:으로|로)(?=\s|$|[,.]|바|변|줄|늘|조|단|연|상|하|수|고|개|완|강|통|정)")
-RX_REPL2 = re.compile(rf"(?P<a>{Q}|[^\s'\"“”‘’]+?)\s*(?:을|를)\s+(?P<b>{Q}|[^\s'\"“”‘’]+?)\s*(?:으로|로)\s*(?:바꾸|바꿔|변경|수정|고치|고쳐|줄이|줄여|늘리|늘려|단축|연장|조정|통일|대체|한다|하고|상향|하향)")
+RX_REPL2 = re.compile(rf"(?P<a>{Q}|[^\s'\"“”‘’]+?)\s*(?:을|를)\s+(?P<b>{Q}|[^\s'\"“”‘’]+?)\s*(?:으로|로)\s*(?:바꾸|바꿔|변경|수정|고치|고쳐|줄이|줄여|늘리|늘려|단축|연장|조정|통일|대체|한다|하고|상향|하향|완화|강화|해\s*줘|하자|$)")
 RX_DELETE = re.compile(r"제(\d+)조(?:의(\d+))?\s*(?:\([^)]*\))?\s*(?:을|를|는|은)?\s*(?:삭제|없애|폐지)")
 RX_RETITLE = re.compile(rf"제(\d+)조(?:의(\d+))?\s*(?:의)?\s*제목\s*(?:을|를)\s*(?P<t>{Q}|\S+?)\s*(?:으로|로)")
 RX_ADD_ITEM = re.compile(rf"제(\d+)조(?:의(\d+))?(?:\s*제(\d+)항)?\s*에\s*(?P<t>{Q})\s*(?:을|를|라는)?\s*(?:내용\s*(?:을|를)\s*)?(?:호|항목|사항|요건|사유|서류)?(?:로|으로)?\s*(?:추가|넣|신설)")
 RX_ADD_PARA = re.compile(rf"제(\d+)조(?:의(\d+))?\s*에\s*(?P<t>{Q})\s*(?:을|를|라는)?\s*(?:내용\s*(?:을|를)\s*)?(?:새\s*)?항(?:으로|을)?\s*(?:추가|넣|신설)")
 RX_INSERT = re.compile(r"(?:신설|새로\s*(?:만들|넣|추가|두)|추가|넣어|넣고|넣는|만들어|만들고)")
 RX_AFTER = re.compile(r"제(\d+)조(?:의(\d+))?\s*(?:\([^)]*\))?\s*(?:의\s*)?(?:다음에|뒤에|다음으로|이후에|다음|뒤)")
+RX_SET = re.compile(r"(?P<topic>\S(?:.*\S)?)\s*(?:을|를)\s+(?P<n>\d+)\s*(?P<u>일|개월|시간|주|년|회|명|원|분)(?P<sfx>\s*(?:전|이내|이상|이하|후))?\s*(?:으로|로)(?!\S*에서)")
+TIME = r"(?:\d{1,2}:\d{2}|(?:오전|오후)\s*\d{1,2}시(?:\s*\d{1,2}분)?|\d{1,2}시(?:\s*\d{1,2}분)?)"
+RX_TIME = re.compile(rf"(?P<topic>.*?)\s*(?:을|를)?\s*(?P<t1>{TIME})\s*(?:부터|~|-|∼)\s*(?P<t2>{TIME})\s*(?:까지)?\s*(?:으로|로)")
+RX_TIME_IN = re.compile(rf"(?P<t1>{TIME})\s*(?P<sep>부터|~|-|∼)\s*(?P<t2>{TIME})(?:\s*까지)?")
+RX_APX_ADD = re.compile(rf"별표\s*(?P<no>\d+)?\s*(?:의\s*\S+\s*)?에\s*(?P<t>{Q})\s*(?:을|를|라는)?\s*(?:내용\s*(?:을|를)\s*)?(?:항목|줄|호|기준)?\s*(?:으로|로)?\s*(?:추가|넣|신설)")
+RX_TARGET = re.compile(r"^.{0,40}?(?:규정|지침|조례|규칙|세칙)\s*에서\s+")
+EXAMPLES = ("'7일을 10일로 바꿔줘', '제8조제2항의 \"7일\"을 \"5일\"로', '운영 시간을 06:00부터 23:00까지로', "
+            "'단체 이용 신청 기한을 3일 전으로', '제12조 삭제', '제8조 다음에 사용허가 취소에 관한 조문 신설', "
+            "'별표 1에 \"다자녀 가정: 100분의 30\"을 추가'")
+
+
+def not_understood(cl, why=""):
+    return (f"'{cl}': 해석하지 못함{' — ' + why if why else ''}. 규칙으로 읽을 수 있는 문형 예: {EXAMPLES}. "
+            "개정 화면에서 작업을 직접 추가할 수도 있습니다.")
+
+
 RX_EFFECT = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:부터)?\s*시행")
 STOP = {"기한", "기간", "바꾸", "변경", "줄이", "늘리", "규정", "조문", "내용", "수정", "개정", "하고", "싶어", "해줘", "한다",
         "으로", "에서", "부터", "이내", "까지", "에서는", "관련", "부분", "현행", "있는", "없는", "모두", "전부"}
+
+
+def prom_date():
+    """공포일 자리표시. 대비표·전문의 '삭제 <2026. ○. ○.>', '부칙 <2026. ○. ○.>' 표기에 쓴다."""
+    return f"{date.today().year}. ○. ○."
+
+
+def mark_deleted(text, keys):
+    """전문에서 이번에 삭제한 조('제12조 삭제')에 개정일 표기를 붙인다."""
+    labels = {regparse.alabel(*regparse.parse_key(k)) for k in keys}
+    return "\n".join(f"{l} <{prom_date()}>" if l.endswith(" 삭제") and l[:-3] in labels else l for l in text.split("\n"))
 
 
 def unq(s):
@@ -120,6 +148,9 @@ def parse_intent(text, entry, lib=None, head="이사장"):
         if RX_EFFECT.search(cl) and not RX_REPL.search(cl):
             continue
         op = None
+        body = RX_TARGET.sub("", cl, count=1)  # "체육시설 운영 규정에서 ..." 대상 지정 구절 떼기
+        if body != cl and not body.strip():
+            continue
         # 조 삭제
         m = RX_DELETE.search(cl)
         if m and "항" not in cl[m.end(): m.end() + 3]:
@@ -151,16 +182,30 @@ def parse_intent(text, entry, lib=None, head="이사장"):
                 para = int(m.group(3)) if m.group(3) else None
                 ops.append({"type": "add_item", "article": k, "para": para, "text": unq(m.group("t")), "src": cl})
                 continue
-        m = RX_REPL.search(cl) or RX_REPL2.search(cl)
+        m = RX_APX_ADD.search(body)
         if m:
-            op = _resolve_replace(cl, m, entry)
+            op = _resolve_appendix_add(cl, m, entry)
+            (notes.append(op["error"]) if op.get("error") else ops.append(op))
+            continue
+        m = RX_TIME.search(body)
+        if m:
+            op = _resolve_time(cl, m, entry)
+        else:
+            m = RX_SET.search(body)
+            if m and not re.search(r"\d", m.group("topic").split()[-1]) and not RX_REPL.search(body):
+                op = _resolve_set(cl, m, entry)
+            else:
+                m = RX_REPL.search(body) or RX_REPL2.search(body)
+                op = _resolve_replace(cl, m, entry) if m else None
+        if op is not None:
             if op.get("error"):
                 notes.append(op["error"])
             else:
                 ops.append(op)
                 if op.get("alternatives"):
-                    notes.append(f"{drafting.qj(op['find'], '이/가')} 들어간 곳이 여러 곳입니다. {drafting.josa(op['loc'], '을/를')} 골랐습니다. 다른 후보: " +
-                                 ", ".join(x["loc"] for x in op["alternatives"]))
+                    notes.append(f"{drafting.qj(op['find'], '이/가')} 들어간 곳이 {len(op['alternatives']) + 1}곳입니다. "
+                                 f"우선 {drafting.josa(op['loc'], '을/를')} 골랐습니다. 다른 후보: " +
+                                 ", ".join(x["loc"] for x in op["alternatives"]) + ". 바꿀 곳을 골라 주세요.")
             continue
         if RX_INSERT.search(cl) and not re.search(r"별표|별지", cl):
             op = _resolve_insert(cl, entry, lib, head)
@@ -170,57 +215,153 @@ def parse_intent(text, entry, lib=None, head="이사장"):
                 ops.append(op)
                 notes.extend(op.pop("notes", []))
             continue
-        if re.search(r"규정|지침|조례|규칙", cl) and len(cl) < 25:
+        if re.search(r"규정|지침|조례|규칙", cl) and len(cl) < 25 and not re.search(r"\d|바꾸|바꿔|변경|올려|내려|줄여|늘려|추가|삭제|신설", cl):
             continue  # "체육시설 운영 규정에서" 같은 대상 지정 구절
-        notes.append(f"'{cl}': 어떤 개정인지 알아내지 못했습니다. 작업을 직접 추가하거나 문장을 바꿔 주세요.")
+        why = "바꿀 값(숫자·문구)을 함께 적어 주세요" if re.search(r"올려|올리|내려|내리|줄여|늘려|완화|강화|상향|하향", cl) and not re.search(r"\d", cl) else ""
+        notes.append(not_understood(cl, why))
+    if not ops and not notes:
+        notes.append(not_understood(text.strip()))
     return ops, notes, effective
 
 
-def _resolve_replace(cl, m, entry):
-    reg = entry.reg
-    a_raw, b_raw = m.group("a"), m.group("b")
-    find, repl = unq(a_raw), unq(b_raw)
-    quoted = a_raw.strip()[:1] in "\"'“‘「"
-    topic = cl[: m.start()]
+def _scope_of(cl, topic, entry):
+    """'제3조제2항 ...' 같은 범위 지정과 주제 낱말."""
     scope = RX_ART.search(topic) or RX_ART.search(cl)
-    art_keys = None
-    para_no = None
+    art_keys, para_no = None, None
     if scope:
         k = _key(scope.group(1), scope.group(2))
-        if not reg.get(k):
-            return {"error": f"'{cl}': 제{k}조가 없습니다"}
+        if not entry.reg.get(k):
+            return None, None, None, f"'{cl}': 제{k}조가 없습니다"
         art_keys = [k]
         para_no = int(scope.group(3)) if scope.group(3) else None
         topic = topic.replace(scope.group(0), " ")
+    topic = RX_TARGET.sub("", topic.strip(), count=1)
     topic = re.sub(r"(?:을|를|은|는|의|에서)\s*$", "", topic.strip())
     ttoks = [t for t in tokens(topic) if len(t) >= 2 and t not in STOP and t not in tokens(entry.title)]
-    everywhere = quoted and (not ttoks or re.search(r"모두|전부|통일|일괄|전체", cl)) and not scope
-    rx = re.compile(r"(?<![\d가-힣])" + re.escape(find) if find[:1].isdigit() else re.escape(find))
-    cands = []
-    for a in reg.articles:
+    return art_keys, para_no, ttoks, None
+
+
+def _units(entry, art_keys, para_no):
+    for a in entry.reg.articles:
         if a.deleted or (art_keys and a.key not in art_keys):
             continue
         for path, loc, text in walk(a):
             if para_no and a.paras[path[1]].no != para_no:
                 continue
-            for mm in rx.finditer(text):
-                cands.append({"article": a.key, "path": list(path), "loc": a.label + loc,
-                              "anchor": _anchor(text, mm.start(), mm.end()),
-                              "score": _topic_score(ttoks, a.title + " " + text), "text": text})
+            yield a, path, loc, text
+
+
+def _choose(cands, cl, find, repl):
+    """주제 점수가 가장 높은 곳을 고르고, 같은 점수의 다른 곳은 후보(alternatives)로 남긴다."""
+    cands.sort(key=lambda c: -c["score"])
+    best = cands[0]
+    ties = [c for c in cands[1:] if c["score"] == best["score"]]
+    op = {"type": "replace", "article": best["article"], "path": best["path"], "find": best.get("find", find),
+          "repl": best.get("repl", repl), "anchor": best["anchor"], "all": False, "src": cl, "loc": best["loc"]}
+    if ties:
+        op["alternatives"] = [{"article": c["article"], "path": c["path"], "loc": c["loc"], "anchor": c["anchor"],
+                               "find": c.get("find", find), "repl": c.get("repl", repl)} for c in ties]
+    return op
+
+
+def _resolve_set(cl, m, entry):
+    """'신청 기한을 3일 전으로' : 주제에 맞는 조문의 'N일 전'을 새 값으로 바꾼다."""
+    n, u, sfx = m.group("n"), m.group("u"), re.sub(r"\s", "", m.group("sfx") or "")
+    art_keys, para_no, ttoks, err = _scope_of(cl, m.group("topic"), entry)
+    if err:
+        return {"error": err}
+    rx = re.compile(r"(?<![\d,])(\d+)\s*" + re.escape(u) + (r"\s*" + re.escape(sfx) if sfx else ""))
+    cands = []
+    for a, path, loc, text in _units(entry, art_keys, para_no):
+        for mm in rx.finditer(text):
+            old = f"{mm.group(1)}{u}"
+            if mm.group(1) == n:
+                continue
+            cands.append({"article": a.key, "path": list(path), "loc": a.label + loc, "find": old, "repl": f"{n}{u}",
+                          "anchor": _anchor(text, mm.start(), mm.end()), "score": _topic_score(ttoks, a.title + " " + text)})
+    want = f"{n}{u}{' ' + sfx if sfx else ''}"
+    if not cands:
+        return {"error": not_understood(cl, f"규정에서 바꿀 '○{u}{' ' + sfx if sfx else ''}' 값을 찾지 못했습니다")}
+    if ttoks and max(c["score"] for c in cands) == 0:
+        return {"error": not_understood(cl, f"'{' '.join(ttoks)}'에 해당하는 조문에서 '○{u}{' ' + sfx if sfx else ''}' 값을 찾지 못했습니다")}
+    op = _choose(cands, cl, None, f"{n}{u}")
+    op["note"] = f"'{want}'(으)로 바꿉니다"
+    return op
+
+
+def _resolve_time(cl, m, entry):
+    """'운영 시간을 06:00부터 23:00까지로' : 같은 꼴의 시간 범위를 찾아 바뀐 쪽만 고친다."""
+    t1, t2 = re.sub(r"\s+", " ", m.group("t1")), re.sub(r"\s+", " ", m.group("t2"))
+    art_keys, para_no, ttoks, err = _scope_of(cl, m.group("topic"), entry)
+    if err:
+        return {"error": err}
+    cands = []
+    for a, path, loc, text in _units(entry, art_keys, para_no):
+        for mm in RX_TIME_IN.finditer(text):
+            o1, o2 = mm.group("t1"), mm.group("t2")
+            if o1 == t1 and o2 != t2:
+                find, repl, s0, e0 = o2, t2, mm.start("t2"), mm.end("t2")
+            elif o2 == t2 and o1 != t1:
+                find, repl, s0, e0 = o1, t1, mm.start("t1"), mm.end("t1")
+            elif o1 == t1 and o2 == t2:
+                continue
+            else:
+                find, repl, s0, e0 = mm.group(0), mm.group(0).replace(o1, t1, 1).replace(o2, t2, 1), mm.start(), mm.end()
+            cands.append({"article": a.key, "path": list(path), "loc": a.label + loc, "find": find, "repl": repl,
+                          "anchor": _anchor(text, s0, e0), "score": _topic_score(ttoks, a.title + " " + text)})
+    if not cands:
+        return {"error": not_understood(cl, "규정에서 바꿀 시간 범위(예: 06:00부터 22:00까지)를 찾지 못했습니다")}
+    return _choose(cands, cl, None, None)
+
+
+def _resolve_appendix_add(cl, m, entry):
+    reg = entry.reg
+    text = unq(m.group("t"))
+    no = m.group("no")
+    lines = reg.appendices
+    if not lines:
+        return {"error": f"'{cl}': 이 규정에는 별표가 없습니다"}
+    start = 0
+    if no:
+        start = next((i for i, l in enumerate(lines) if re.match(rf"^\[?\s*별표\s*{no}\s*\]?", l)), None)
+        if start is None:
+            return {"error": f"'{cl}': 별표 {no}을 찾지 못했습니다"}
+    end = next((i for i in range(start + 1, len(lines)) if re.match(r"^\[?\s*별표\s*\d+", lines[i])), len(lines))
+    block = lines[start:end]
+    nums = [int(x.group(1)) for x in (re.match(r"^\s*(\d+)\.", l) for l in block) if x]
+    if nums and not re.match(r"^\s*\d+\.", text):
+        text = f"{max(nums) + 1}. {text}"
+    return {"type": "appendix_add", "after_find": block[-1], "text": text, "src": cl,
+            "loc": f"별표 {no}" if no else "별표"}
+
+
+def _resolve_replace(cl, m, entry):
+    a_raw, b_raw = m.group("a"), m.group("b")
+    find, repl = unq(a_raw), unq(b_raw)
+    quoted = a_raw.strip()[:1] in "\"'“‘「"
+    topic = m.string[: m.start()]
+    art_keys, para_no, ttoks, err = _scope_of(cl, topic, entry)
+    if err:
+        return {"error": err}
+    everywhere = quoted and (not ttoks or re.search(r"모두|전부|통일|일괄|전체", cl)) and not art_keys
+    rx = re.compile(r"(?<![\d가-힣])" + re.escape(find) if find[:1].isdigit() else re.escape(find))
+    cands = []
+    seen = set()
+    for a, path, loc, text in _units(entry, art_keys, para_no):
+        for mm in rx.finditer(text):
+            if (a.key, tuple(path)) in seen:
                 break
+            seen.add((a.key, tuple(path)))
+            cands.append({"article": a.key, "path": list(path), "loc": a.label + loc,
+                          "anchor": _anchor(text, mm.start(), mm.end()),
+                          "score": _topic_score(ttoks, a.title + " " + text), "text": text})
+            break
     if not cands:
         return {"error": f"'{cl}': 규정에서 {drafting.qj(find, '을/를')} 찾지 못했습니다"}
     if everywhere:
         return {"type": "replace", "article": None, "find": find, "repl": repl, "all": True, "src": cl,
                 "loc": f"규정 전체({len(cands)}곳)"}
-    cands.sort(key=lambda c: -c["score"])
-    best = cands[0]
-    ties = [c for c in cands[1:] if c["score"] == best["score"]]
-    op = {"type": "replace", "article": best["article"], "path": best["path"], "find": find, "repl": repl,
-          "anchor": best["anchor"], "all": False, "src": cl, "loc": best["loc"]}
-    if ties:
-        op["alternatives"] = [{"article": c["article"], "path": c["path"], "loc": c["loc"], "anchor": c["anchor"]} for c in ties]
-    return op
+    return _choose(cands, cl, find, repl)
 
 
 def _insert_title(cl):
@@ -444,7 +585,7 @@ def apply(entry, ops, mode="branch", effective=None, lib=None):
     # 4) 부칙
     word = entry.self_word
     eff = f"{effective}부터" if effective else "공포한 날부터"
-    reg.addenda = list(reg.addenda) + [f"부칙({effective or '공포일'})", f"{drafting.josa('이 ' + word, '은/는')} {eff} 시행한다."]
+    reg.addenda = list(reg.addenda) + [f"부칙 <{prom_date()}>", f"{drafting.josa('이 ' + word, '은/는')} {eff} 시행한다."]
     return {"reg": reg, "mapping": mapping, "changes": changes, "errors": errors, "inserted": inserted, "applied": applied}
 
 
@@ -713,8 +854,10 @@ def amendment_text(entry, result, ops, mode, effective=None):
             a = old.get(op["article"])
             lines.append(f"{a.label}를 삭제한다.")
         elif t == "appendix_replace" or t == "appendix_add":
-            if "별표를 별지와 같이 한다." not in lines:
-                lines.append("별표를 별지와 같이 한다.")
+            nm = op.get("loc") if re.match(r"^별표\s*\d+$", op.get("loc") or "") else "별표"
+            line = f"{drafting.josa(nm, '을/를')} 별지와 같이 한다."
+            if line not in lines:
+                lines.append(line)
     if renumber_note:
         moved = [(k, v) for k, v in mapping.items() if v and v != k]
         if moved:
@@ -790,6 +933,16 @@ def compare_rows(old_reg, new_reg, mapping):
         flush()
         out.append(r)
     flush()
+    # 실무 표기: 삭제 조는 '제12조 삭제 <2026. ○. ○.>', 부칙은 이번 개정 부칙만 '부칙 / 이 규정은 …시행한다.'
+    for r in out:
+        if r["kind"] == "삭제" and r["new"].endswith(" 삭제"):
+            r["new"] = f"{r['new']} <{prom_date()}>"
+    out = [r for r in out if r["kind"] != "부칙"]
+    added = new_reg.addenda[len(old_reg.addenda):] if new_reg.addenda[:len(old_reg.addenda)] == old_reg.addenda else []
+    if added:
+        body = [l for l in added if not regparse.RE_ADDENDA.match(l) or len(l) >= 40]
+        out.append({"kind": "부칙", "key_old": None, "key_new": None, "old": "<신 설>",
+                    "new": "\n".join(["__부칙__"] + [f"__{l}__" for l in body])})
     if old_reg.appendices != new_reg.appendices:
         o, n = regparse.mark_diff("\n".join(old_reg.appendices), "\n".join(new_reg.appendices))
         out.append({"kind": "별표", "key_old": None, "key_new": None, "old": o, "new": n})

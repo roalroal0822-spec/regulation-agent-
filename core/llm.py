@@ -35,6 +35,13 @@ FAMILIES = [
 
 # 추론형 모델이 답 앞에 붙이는 생각 과정(<think>…</think>, <thought>…</thought>)
 RX_THINK = re.compile(r"<(think|thought|reasoning)>.*?</\1>\s*", re.S | re.I)
+# 길이 제한으로 닫는 태그 없이 잘린 생각 과정(여는 태그부터 끝까지)
+RX_THINK_OPEN = re.compile(r"<(think|thought|reasoning)>.*\Z", re.S | re.I)
+
+
+def strip_think(text):
+    """생각 과정을 지운다. 닫히지 않은 생각 과정은 답이 아니므로 통째로 버린다."""
+    return RX_THINK_OPEN.sub("", RX_THINK.sub("", text or "")).strip()
 
 
 def family_of(model):
@@ -46,8 +53,9 @@ def family_of(model):
 
 
 class LLM:
-    def __init__(self, cfg):
+    def __init__(self, cfg, saved_base=None):
         self.cfg = cfg  # Config.data["llm"] 를 가리키는 dict
+        self.saved_base = saved_base  # 목록 조회용 임시 객체일 때 저장된 주소(키 전송 허용 범위)
 
     @property
     def provider(self):
@@ -100,10 +108,10 @@ class LLM:
             else:
                 raise
         text, finish = out
-        if not text.strip() and finish == "length":
-            # 생각 과정만 쓰다 길이 제한에 걸린 경우 한도를 늘려 한 번 더
+        if not strip_think(text) and (finish == "length" or text.strip()):
+            # 생각 과정만 쓰다 길이 제한에 걸린 경우(빈 답·닫히지 않은 생각 과정) 한도를 늘려 한 번 더
             text, finish = self._chat(messages, temperature, min(max_tokens * 4, 8192), json_mode)
-        return RX_THINK.sub("", text).strip()
+        return strip_think(text)
 
     def _chat(self, messages, temperature, max_tokens, json_mode):
         base = self.cfg.get("base_url", "").rstrip("/")
@@ -141,7 +149,8 @@ class LLM:
         base = self.cfg.get("base_url", "").rstrip("/")
         headers = {}
         key = os.environ.get(self.cfg.get("api_key_env") or "LLM_API_KEY", "")
-        if key:
+        # 키는 저장된(사용자가 정한) 주소로만 보낸다. 저장 전 새 주소로 목록을 볼 때는 키 없이 요청
+        if key and base == (self.saved_base or base):
             headers["Authorization"] = f"Bearer {key}"
         urls = [base.removesuffix("/v1") + "/api/tags"] if self.provider == "ollama" else [base + "/models", base.removesuffix("/v1") + "/api/tags"]
         last = ""

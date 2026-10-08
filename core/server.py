@@ -100,9 +100,32 @@ class App:
                 return Response(target.read_bytes(), 200, ctype)
         return None
 
+    @staticmethod
+    def _foreign(handler):
+        """다른 웹사이트가 보낸 요청을 막는다(이 앱 화면에서 보낸 요청만 받음).
+        브라우저는 다른 출처로 보내는 POST에 Origin을 붙이므로, 있으면 주소창 주소(Host)와 같아야 한다.
+        본문이 있으면 JSON 형식이어야 한다(사전 확인 없이 보낼 수 있는 text/plain 요청 차단)."""
+        if handler.command == "GET":
+            return None
+        origin = handler.headers.get("Origin")
+        if origin and origin != "null":
+            o = urllib.parse.urlparse(origin)
+            if o.netloc.lower() != (handler.headers.get("Host") or "").lower():
+                return "다른 웹사이트에서 보낸 요청은 처리하지 않습니다"
+        elif origin == "null":
+            return "출처를 알 수 없는 요청은 처리하지 않습니다"
+        if int(handler.headers.get("Content-Length") or 0) > 0:
+            ctype = (handler.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ctype != "application/json":
+                return "요청 형식은 JSON이어야 합니다"
+        return None
+
     def handle(self, handler):
         u = urllib.parse.urlparse(handler.path)
         path = urllib.parse.unquote(u.path)
+        bad = self._foreign(handler)
+        if bad:
+            return json_response({"error": bad}, 403)
         for method, rx, fn in self.routes:
             m = rx.match(path)
             if m and method == handler.command:
@@ -113,9 +136,12 @@ class App:
                     return res
                 except HttpError as e:
                     return json_response({"error": e.message}, e.status)
-                except Exception as e:
+                except json.JSONDecodeError:
+                    return json_response({"error": "요청 내용을 읽을 수 없습니다(JSON 형식 오류)"}, 400)
+                except Exception:
+                    # 내부 오류 내용은 실행 창(서버 기록)에만 남기고 화면에는 일반 안내만 보낸다
                     traceback.print_exc()
-                    return json_response({"error": f"{type(e).__name__}: {e}"}, 500)
+                    return json_response({"error": "처리 중 오류가 발생했습니다. 입력 내용을 확인하거나 실행 창의 기록을 확인하세요."}, 500)
         if handler.command == "GET":
             res = self._static(path)
             if res:

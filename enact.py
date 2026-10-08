@@ -3,7 +3,7 @@ import re
 
 from core import regparse
 from core.llm import LLMError
-from core.textutil import similarity, tokens
+from core.textutil import similarity, strip_josa, tokens
 
 import drafting
 from library import kind_of, SELF_WORD
@@ -66,9 +66,37 @@ def suggest_matters(purpose, title=""):
 
 def purpose_phrase(purpose):
     p = re.sub(r"\s+", " ", (purpose or "").strip().rstrip("."))
-    p = re.sub(r"\s*(?:을|를)?\s*(?:정하려고\s*함|정하려\s*함|정하고자\s*함|정하기\s*위함|정하기\s*위해|정한다|정함|정하려고\s*합니다|정하려고\s*해|마련하려고\s*함|마련하고자\s*함|마련|규정하려고\s*함|규정함)$", "", p)
-    p = re.sub(r"\s*(?:에\s*관하여|에\s*관한)?\s*(?:필요한\s*)?사항$", "", p)
+    p = re.sub(r"\s*(?:위하여|위해서|위해|위함)$", "", p)
+    p = re.sub(r"\s*(?:을|를)?\s*(?:정하기|정하려고\s*함|정하려\s*함|정하고자\s*함|정하기\s*위함|정하기\s*위해|정한다|정함|정하려고\s*합니다|정하려고\s*해|마련하려고\s*함|마련하고자\s*함|마련|규정하려고\s*함|규정함)$", "", p)
+    p = re.sub(r"(?:\s*에\s*관하여|\s*에\s*관한)?\s+(?:필요한\s*)?사항$|\s*(?:에\s*관하여|에\s*관한)\s*(?:필요한\s*)?사항$", "", p)
+    p = re.sub(r"\s*(?:에\s*관하여|에\s*관한|을|를)$", "", p)
     return p.strip() or "【목적】"
+
+
+def purpose_clause(purpose):
+    """제1조에 들어갈 '…에 관하여 필요한 사항' 구절. '…운영하기'처럼 동사로 끝나면 '…운영하는 데 필요한 사항'."""
+    p = purpose_phrase(purpose)
+    if p.endswith("하기") and len(p) > 2:
+        return f"{p[:-1]}는 데 필요한 사항"
+    return f"{p}에 관하여 필요한 사항"
+
+
+def _ref_placeholders(articles):
+    """'제【○】조에 따른 신청'처럼 초안 안에서 가리키는 조가 정해져 있으면 번호를 넣는다."""
+    by = {a["matter"]: a["key"] for a in articles}
+    for a in articles:
+        if "신청" in by and by["신청"] != a["key"]:
+            a["text"] = a["text"].replace("제【○】조에 따른 신청", f"제{by['신청']}조에 따른 신청")
+
+
+def _definitions(self_word, core_word, others):
+    """정의 조: 본문에 실제로 쓰인 용어만 정의한다."""
+    terms = [core_word] + [t for t in ("이용자",) if t != core_word and any(t in x for x in others)]
+    ran = lambda w: "이란" if drafting.has_batchim(w) else "란"
+    if len(terms) == 1:
+        return f"이 {self_word}에서 \"{core_word}\"{ran(core_word)} 【뜻을 적으세요】을 말한다."
+    return f"이 {self_word}에서 사용하는 용어의 뜻은 다음과 같다.\n" + "\n".join(
+        f"{i}. \"{t}\"{ran(t)} 【뜻을 적으세요】을 말한다." for i, t in enumerate(terms, 1))
 
 
 def parse_delegation(text):
@@ -122,7 +150,6 @@ def draft(lib, title, purpose, delegation=None, matters=None, head="이사장", 
     basis = ""
     if deleg.get("law") and deleg.get("label"):
         basis = f"「{deleg['law']}」 {deleg['label']}에 따라 "
-    phrase = purpose_phrase(purpose)
     upper = lib.regs("upper")
     articles, notes = [], []
     for key in matters:
@@ -131,11 +158,10 @@ def draft(lib, title, purpose, delegation=None, matters=None, head="이사장", 
         ref = None
         upper_basis = None
         if key == "목적":
-            body = f"{drafting.josa('이 ' + self_word, '은/는')} {basis}{phrase}에 관하여 필요한 사항을 정함을 목적으로 한다."
+            body = f"{drafting.josa('이 ' + self_word, '은/는')} {basis}{purpose_clause(purpose)}을 정함을 목적으로 한다."
         elif key == "정의":
             ra = _ref_article(lib, "정의", "정의")
-            ran = "이란" if drafting.has_batchim(core_word) else "란"
-            body = f"이 {self_word}에서 사용하는 용어의 뜻은 다음과 같다.\n1. \"{core_word}\"{ran} 【뜻을 적으세요】을 말한다.\n2. \"이용자\"란 【뜻을 적으세요】을 말한다."
+            body = ""  # 다른 조를 다 만든 뒤 쓰인 용어만 정의한다
             if ra:
                 ref = {"reg": ra[0].short, "label": ra[1].label, "title": ra[1].title, "text": ra[1].plain}
         elif key == "세부":
@@ -155,6 +181,12 @@ def draft(lib, title, purpose, delegation=None, matters=None, head="이사장", 
                 if key == "감면":
                     body = f"사용료의 감면 대상과 감면율은 「{upper_basis['law']}」 {upper_basis['label']}에 따른다."
         articles.append({"matter": key, "title": a_title, "part": part, "text": body, "ref": ref, "upper": upper_basis})
+    for i, a in enumerate(articles, 1):
+        a["key"] = str(i)
+    _ref_placeholders(articles)
+    for a in articles:
+        if a["matter"] == "정의":
+            a["text"] = _definitions(self_word, core_word, [x["text"] for x in articles if x is not a])
     # 장 나누기: 조가 9개 이상이면 총칙·본문·보칙
     use_ch = len(articles) >= 9
     lines = [title if not org or org in title else f"{org} {title}"]
@@ -184,6 +216,8 @@ def rebuild_text(d):
     cur = None
     for i, a in enumerate(d["articles"], 1):
         a["key"] = str(i)
+    _ref_placeholders(d["articles"])
+    for i, a in enumerate(d["articles"], 1):
         if a.get("chapter") and a["chapter"] != cur:
             cur = a["chapter"]
             lines.append(cur)
@@ -218,20 +252,124 @@ def compare_similar(lib, d, k=2):
     return {"regs": [{"id": e.id, "title": e.short} for e in regs], "rows": rows}
 
 
+GENERIC = {"운영", "관리", "처리", "시행", "지침", "규정", "세칙", "요령", "기준", "규칙", "조례", "사항", "필요", "세부",
+           "공단", "기관", "업무", "관한", "대한", "이사장", "구청장", "위탁", "위탁받은"}
+RX_WORDING = re.compile(r"필요한\s*(?:세부\s*)?사항(?:은|을)\s*.{0,30}?정(?:한다|할\s*수\s*있다|하여야\s*한다)|정하는\s*바에\s*따른다|위임한다|따로\s*정한다")
+
+
+def subject_words(d):
+    """만들려는 규정의 주제 낱말(이름의 핵심어). 예: '체육시설 정기대관' -> [체육시설, 정기대관]"""
+    words = [strip_josa(w) for w in re.findall(r"[가-힣A-Za-z0-9]+", d.get("core") or core_of(d.get("title", "")))]
+    return [w for w in words if len(w) >= 2 and w not in GENERIC]
+
+
+def _subject_match(words, text):
+    t = re.sub(r"\s", "", text or "")
+    return [w for w in words if w in t]
+
+
+def _units(article):
+    """조문의 항 단위 (표시, 글). 항이 없으면 조 전체."""
+    paras = [p for p in article.paras if p.text.strip() or p.items]
+    if len(paras) <= 1:
+        return [(article.label, article.plain)]
+    out = []
+    for p in paras:
+        text = " ".join([p.text] + [it.text for it in p.items])
+        out.append((f"{article.label}제{p.no}항" if p.no else article.label, text))
+    return out
+
+
+def _wording(text):
+    info = parse_delegation(text)
+    return info if (info["who"] or info["scope"] or RX_WORDING.search(info["text"])) else None
+
+
+def _scope_text(e, info, unit_text):
+    """위임 대상 범위 글. '이 조례의 시행'처럼 법령 자체를 가리키면 법령 이름을 범위로 본다."""
+    sc = info.get("scope") or unit_text
+    if re.search(r"^이\s*(?:조례|법|규칙|영|규정)(?:의)?\s*(?:시행|운영)?$", sc.strip()) or not info.get("scope"):
+        sc = f"{sc} {e.title}"
+    return sc
+
+
+def delegation_candidates(lib, d, exclude=None):
+    """상위 법령에서 위임 문구가 있고 주제가 맞는 조·항 (형식이 맞는 것 먼저)."""
+    words = subject_words(d)
+    out = []
+    for e in lib.regs("upper"):
+        for a in e.reg.articles:
+            if a.deleted:
+                continue
+            for label, text in _units(a):
+                if exclude and (e.id, label) == exclude:
+                    continue
+                info = _wording(text)
+                if not info:
+                    continue
+                hit = _subject_match(words, _scope_text(e, info, text))
+                if not hit:
+                    continue
+                form_ok = not (info["form"] == "규칙" and d.get("kind") != "규칙")
+                out.append((form_ok, len(hit), {"law": e.short, "entry_id": e.id, "key": a.key, "label": label,
+                                                 "text": text, "form_ok": form_ok}))
+    out.sort(key=lambda x: (not x[0], -x[1]))
+    return [c for *_, c in out]
+
+
+def _cand_text(cands, k=3):
+    if not cands:
+        return " 규정집의 상위 법령에서 주제가 맞는 위임 조항을 찾지 못했습니다."
+    return " 주제가 맞는 위임 조항 후보: " + "; ".join(
+        f"{c['law']} {c['label']}(\"{c['text'][:60]}{'…' if len(c['text']) > 60 else ''}\")" + ("" if c["form_ok"] else " — 규칙으로 정하도록 한 위임이라 형식 확인 필요")
+        for c in cands[:k]) + "."
+
+
 def check_delegation(lib, d, deleg):
-    """위임 범위 검토: 위임 형식, 권리·의무 조항의 상위법 근거."""
+    """위임 범위 검토: 인용한 상위법 조항이 (1) 위임 문구를 갖고 (2) 만들려는 규정의 주제를 맡겼는지,
+    위임 형식, 권리·의무 조항의 상위법 근거."""
     items = []
-    info = parse_delegation(deleg.get("text", "")) if deleg else {"who": "", "scope": "", "form": ""}
+    info = {"who": "", "scope": "", "form": ""}
+    words = subject_words(d)
+    subj = ", ".join(words) or d.get("core", "")
     if not deleg or not deleg.get("text"):
-        items.append({"level": "주의", "item": "위임 근거", "result": "상위법 위임 조항이 지정되지 않았습니다. 근거 조항을 확인하세요."})
+        items.append({"level": "주의", "item": "위임 근거", "result": "상위법 위임 조항이 지정되지 않았습니다. 근거 조항을 확인하세요." + _cand_text(delegation_candidates(lib, d))})
     else:
-        items.append({"level": "확인", "item": "위임 근거", "result": f"{deleg.get('law', '')} {deleg.get('label', '')}: {deleg['text']}"})
-        if info["who"]:
-            ok = not (info["form"] == "규칙" and d["kind"] not in ("규칙",))
-            items.append({"level": "확인" if ok else "주의", "item": "위임 형식",
-                          "result": f"위임받는 자: {info['who']} / 만들려는 문서: {d['kind']}" + ("" if ok else " (규칙으로 정하도록 위임되어 있어 형식이 맞지 않을 수 있음)")})
-        if info["scope"]:
-            items.append({"level": "확인", "item": "위임 범위", "result": f"'{info['scope']}' 범위 안에서 정해야 합니다."})
+        e = lib.get(deleg["entry_id"]) if deleg.get("entry_id") else None
+        a = e.reg.get(deleg["key"]) if e and deleg.get("key") else None
+        cited = f"{deleg.get('law', '')} {deleg.get('label', '')}".strip()
+        # 조 전체를 인용했으면 위임 문구가 있는 항을 찾는다
+        units = _units(a) if (a and not deleg.get("para")) else [(deleg.get("label", ""), deleg["text"])]
+        found = [(lb, tx, _wording(tx)) for lb, tx in units]
+        found = [x for x in found if x[2]]
+        if found and e is not None:
+            found.sort(key=lambda x: -len(_subject_match(words, _scope_text(e, x[2], x[1]))))
+        if not found:
+            what = f"({a.title})" if a and a.title else ""
+            items.append({"level": "근거 없음", "item": "위임 근거",
+                          "result": f"{cited}{what}에는 다른 규정에 정하도록 맡기는 위임 문구(예: '…에 필요한 사항은 …이 정한다')가 없습니다. "
+                                    f"내용: \"{deleg['text'][:80]}{'…' if len(deleg['text']) > 80 else ''}\"." +
+                                    _cand_text(delegation_candidates(lib, d))})
+        else:
+            label, text, info = found[0]
+            scope_txt = _scope_text(e, info, text) if e is not None else (info["scope"] or text)
+            hit = _subject_match(words, scope_txt)
+            unit = label if label and label != deleg.get("label") else deleg.get("label", "")
+            where = f"{deleg.get('law', '')} {unit}".strip()
+            if hit or not words:
+                items.append({"level": "확인", "item": "위임 근거",
+                              "result": f"{where}: {text} — 위임 문구가 있고, 위임 대상('{info['scope'] or scope_txt}')이 만들려는 {d['kind']}의 주제({', '.join(hit) or subj})와 맞습니다."})
+            else:
+                excl = (e.id, label) if e is not None else None
+                items.append({"level": "확인 필요", "item": "위임 근거",
+                              "result": f"{where}: {text} — 위임 문구는 있으나 위임 대상('{info['scope'] or text[:40]}')이 만들려는 {d['kind']}의 주제({subj})와 맞지 않습니다. 이 조항이 근거가 되는지 확인하세요." +
+                                        _cand_text(delegation_candidates(lib, d, exclude=excl))})
+            if info["who"]:
+                ok = not (info["form"] == "규칙" and d["kind"] not in ("규칙",))
+                items.append({"level": "확인" if ok else "주의", "item": "위임 형식",
+                              "result": f"위임받는 자: {info['who']} / 만들려는 문서: {d['kind']}" + ("" if ok else " (규칙으로 정하도록 위임되어 있어 형식이 맞지 않을 수 있음)")})
+            if info["scope"]:
+                items.append({"level": "참고", "item": "위임 범위", "result": f"'{info['scope']}' 범위 안에서 정해야 합니다."})
     for a in d["articles"]:
         if a["matter"] in ("목적", "정의", "세부"):
             continue
@@ -282,6 +420,9 @@ def make(lib, title, purpose, delegation=None, matters=None, head="이사장", o
             d["notes"].append(f"모델 호출 실패로 표준 조문 초안을 썼습니다: {e}")
     d["similar"] = compare_similar(lib, d)
     d["delegation_check"] = check_delegation(lib, d, delegation)
+    top = d["delegation_check"]["items"][0] if d["delegation_check"]["items"] else None
+    if top and top["item"] == "위임 근거" and top["level"] in ("근거 없음", "확인 필요"):
+        d["notes"].append(f"위임 근거 검토 결과 '{top['level']}'입니다. 제1조의 위임 근거 표기를 확인하세요(위임 범위 검토 참고).")
     return d
 
 

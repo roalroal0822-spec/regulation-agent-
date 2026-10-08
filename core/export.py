@@ -190,5 +190,8 @@ FORMATS = {
 
 
 def export(blocks, fmt):
+    if fmt not in FORMATS:
+        from .server import HttpError
+        raise HttpError(400, f"지원하지 않는 파일 형식입니다: '{fmt}'. 한글(hwpx)·워드(docx)·마크다운(md) 중에서 골라 주세요.")
     fn, ctype = FORMATS[fmt]
     return fn(blocks), ctype

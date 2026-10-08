@@ -9,6 +9,8 @@
   python tools/verify_models.py --mock
 
 결과: verify_report.md (모델별·기능별 통과 여부, 걸린 시간, 모델 제안 중 검증에서 걸러진 수)
+'통과'는 오류 없이 응답했다는 뜻만이 아니라, 결과가 모의자료의 정답(출장지·날짜, 원문 전화번호,
+개정 후 조문 내용, 제정 조문 수)과 맞는다는 뜻이다.
 """
 import argparse
 import subprocess
@@ -49,13 +51,20 @@ def check_baton(llm):
     t = time.time()
     draft = engine.analyze(docs, "김도윤", llm)
     by_model = sum(1 for sec in draft["sections"].values() for it in sec if it.get("by") == "model")
-    ok = "모델" in draft["engine"] and not draft["llm_errors"]
+    # 모델이 보탠 항목도 원문 대조 검증을 거친 것만 남는다(엔진이 내용 불일치 항목을 버림)
+    ok = "모델" in draft["engine"] and not draft["llm_errors"] and by_model > 0
     res.append(("업무바통: 인수인계서 초안(모델 추출 + 근거 검증)", ok, time.time() - t,
                 f"모델이 추가한 항목 {by_model}개, 오류 {len(draft['llm_errors'])}건" + (f": {draft['llm_errors'][0][:80]}" if draft["llm_errors"] else "")))
     t = time.time()
     blocks = [asdict(b) for x in docs for b in x.blocks]
     a = qa.answer(draft, blocks, "정민재 연락처 알려줘", llm)
-    res.append(("업무바통: 후임자 질문 답변", a["mode"] != "규칙 기반" and bool(a["answer"]), time.time() - t, a["answer"][:60].replace("\n", " ")))
+    # 답 품질: 답에 나온 전화번호가 원문에서 '정민재'와 같은 문단에 실제로 있어야 통과
+    import re
+    phones = set(re.findall(r"0\d{1,2}-\d{3,4}-\d{4}", a["answer"]))
+    real = {p for b in blocks if "정민재" in (b.get("text") or "") for p in re.findall(r"0\d{1,2}-\d{3,4}-\d{4}", b["text"])}
+    ok_ans = a["mode"] != "규칙 기반" and bool(phones) and phones <= real
+    res.append(("업무바통: 후임자 질문 답변(번호가 원문과 일치)", ok_ans, time.time() - t,
+                a["answer"][:60].replace("\n", " ") + ("" if ok_ans else f" / 답의 번호 {sorted(phones) or '없음'}, 원문 번호 {sorted(real)}")))
     sys.path.remove(str(d))
     return res
 
@@ -70,9 +79,12 @@ def check_seomu(llm):
     cards = kb.extract_procedures()
     t = time.time()
     r = assistant.respond(kb, cards, "어제 부산에서 1박 2일 출장 다녀왔어요. 정산 어떻게 해요?", date(2026, 10, 7), llm)
-    ok = r.get("type") == "procedure" and "모델 응답 실패" not in r.get("text", "") and "출장" in r["card"]["name"]
+    sl = r.get("slots") or {}
+    ok = (r.get("type") == "procedure" and "모델 응답 실패" not in r.get("text", "") and "출장" in r["card"]["name"]
+          and sl.get("destination") == "부산" and sl.get("date") == "2026-10-06" and sl.get("stage") == "after")
     sys.path.remove(str(d))
-    return [("서무비서: 상황 문장 → 절차 선택·정보 추출", ok, time.time() - t, f"선택 절차: {r.get('card', {}).get('name')}")]
+    return [("서무비서: 상황 문장 → 절차 선택·정보 추출(출장지·날짜·단계 일치)", ok, time.time() - t,
+             f"선택 절차: {r.get('card', {}).get('name')}, 출장지 {sl.get('destination')}, 날짜 {sl.get('date')}, 단계 {sl.get('stage')}")]
 
 
 def check_gyujeong(llm):

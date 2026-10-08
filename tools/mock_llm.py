@@ -69,6 +69,19 @@ def gyujeong_enact(user):
     return {"articles": [{"title": t, "text": x.strip()} for t, x in arts]}
 
 
+def qa_answer(user):
+    """후임자 질문: 질문에 나온 이름이 있는 자료 줄에서 전화번호를 찾아 근거 번호와 함께 답한다."""
+    q = user.split("[질문]")[-1]
+    lines = [l for l in user.split("[질문]")[0].splitlines() if re.match(r"\s*\[\d+\]", l)]
+    for nm in re.findall(r"[가-힣]{2,4}", q):
+        for line in lines:
+            ph = re.search(r"0\d{1,2}-\d{3,4}-\d{4}", line)
+            if nm in line and ph:
+                n = re.match(r"\s*\[(\d+)\]", line).group(1)
+                return {"answer": f"{nm} 연락처는 {ph.group(0)}입니다 [{n}].", "used": [int(n)]}
+    return {"answer": "자료에서 찾지 못했습니다.", "used": []}
+
+
 def answer(messages, model):
     system = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""
     user = messages[-1]["content"] if messages else ""
@@ -80,7 +93,7 @@ def answer(messages, model):
     elif "업무 개요" in system:
         obj = {"overview": "(모델 작성) 자료에 나온 담당업무와 현안을 바탕으로 정리한 인수인계 개요입니다."}
     elif "후임자의 질문" in system:
-        obj = {"answer": "자료에 따르면 관련 내용이 있습니다 [1].", "used": [1]}
+        obj = qa_answer(user)
     elif "서무 담당자를 돕는" in system:
         obj = seomu_pick(user)
     elif "규정 개정 실무자" in system:

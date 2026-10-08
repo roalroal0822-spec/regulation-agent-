@@ -276,7 +276,8 @@ def _preview(e, ops, mode, effective):
     return {"entry_id": e.id, "title": e.title, "short": e.short, "mode": mode, "effective": effective,
             "ops": ops, "errors": res["errors"], "mapping": res["mapping"], "changes": res["changes"],
             "propagate": prop, "compare": rows, "amendment": text,
-            "old_text": e.reg.to_text(), "new_text": res["reg"].to_text(), "lint": issues}
+            "old_text": e.reg.to_text(), "lint": issues,
+            "new_text": amend.mark_deleted(res["reg"].to_text(), [o["article"] for o in ops if o.get("type") == "delete" and o.get("article")])}
 
 
 class _TmpEntry:
@@ -673,8 +674,12 @@ def agent(req):
             if law and law.reg.get(regparse.akey(int(dm.group(2)), int(dm.group(3) or 0))):
                 deleg = {"entry_id": law.id, "key": regparse.akey(int(dm.group(2)), int(dm.group(3) or 0)), "para": dm.group(4)}
         m2 = re.search(r"목적은|목적:", text)
-        purpose = text[m2.end():].strip() if m2 else text
-        purpose = re.sub(r"\s*(?:위해서|위해|위함)\s*[.!]?$", "", purpose) or text
+        purpose = text[m2.end():].strip() if m2 else ""
+        purpose = re.sub(r"\s*(?:위해서|위해|위함|위하여)\s*[.!]?$", "", purpose)
+        if not purpose and title:
+            # 목적을 따로 말하지 않았으면 규정 이름에서 만든다(요청 문장 전체를 목적으로 쓰지 않는다)
+            core = enact.core_of(title, settings()["org_name"])
+            purpose = f"{core}의 운영" if "운영" in title else core
         if not title:
             raise HttpError(400, "만들 규정의 이름을 알려 주세요. 예: \"체육시설 정기대관 운영 지침을 새로 만들려고 해\"")
         steps.append({"title": "제정 대상 확인", "detail": f"{title}" + (f" · 위임 조항 {dm.group(0)}" if deleg else " · 위임 조항 미지정")})
@@ -701,6 +706,20 @@ def agent(req):
         return {"route": "amend", "steps": steps + [{"title": "개정 의도 해석", "detail": " ".join(p["notes"]) or "개정 내용을 찾지 못했습니다"}],
                 "entry_id": e.id, "plan": p}
     steps.append({"title": "개정 의도 해석", "detail": f"작업 {len(p['ops'])}개 ({p['engine']}): " + "; ".join(amend.describe(o, e.reg) for o in p["ops"])})
+    choices = [{"op_index": i, "find": o["find"], "repl": o["repl"],
+                "candidates": [{"article": o["article"], "path": o["path"], "loc": o["loc"], "anchor": o["anchor"], "find": o["find"], "repl": o["repl"]}]
+                + [dict(x, find=x.get("find") or o["find"], repl=x.get("repl") or o["repl"]) for x in o["alternatives"]]}
+               for i, o in enumerate(p["ops"]) if o.get("type") == "replace" and o.get("alternatives")]
+    if choices:
+        # 같은 문구가 여러 곳에 있으면 임의로 고르지 않고 어느 곳을 바꿀지 묻는다(개정 화면의 후보 선택과 같은 방식)
+        for ch in choices:
+            for cand in ch["candidates"]:
+                ca = e.reg.get(cand["article"])
+                cand["text"] = amend.get_unit(ca, cand["path"]) if ca else ""
+        steps.append({"title": "확인 필요: 바꿀 곳 고르기", "detail": " / ".join(
+            f"{amend.drafting.qj(ch['find'], '이/가')} {len(ch['candidates'])}곳에 있습니다: " + ", ".join(c["loc"] for c in ch["candidates"]) for ch in choices)
+            + ". 어느 곳을 바꿀지 골라 주세요(개정안·진행 건은 고른 뒤에 만듭니다)."})
+        return {"route": "amend", "steps": steps, "entry_id": e.id, "plan": p, "choices": choices}
     mode = procedure.numbering_default(L)
     pv = _preview(e, p["ops"], mode["mode"], p["effective"])
     steps.append({"title": "개정안·신구조문대비표 작성", "detail": f"번호 방식: {'가지 번호' if mode['mode'] == 'branch' else '번호 이동'} ({mode['basis']}) · 대비표 {len(pv['compare'])}행"})

@@ -10,7 +10,32 @@ function cmpTable(rows) {
   return el("table", { class: "t cmp cmp2" }, el("tr", {}, el("th", {}, "현행"), el("th", {}, "개정안")),
     rows.map(r => el("tr", {}, el("td", { html: rich(r.old) }), el("td", { html: rich(r.new) }))));
 }
-function levelTag(l) { return el("span", { class: "lv-" + l }, l); }
+const LV_CLASS = { "확인 필요": "주의", "근거 없음": "오류" };
+function levelTag(l) { return el("span", { class: "lv-" + (LV_CLASS[l] || l) }, l); }
+function delegTable(dc) {
+  return el("table", { class: "t" }, el("tr", {}, el("th", {}, "구분"), el("th", {}, "항목"), el("th", {}, "결과")),
+    dc.items.map(i => el("tr", {}, el("td", {}, levelTag(i.level)), el("td", {}, i.item), el("td", {}, i.result))));
+}
+function choicePanel(r) {
+  // 같은 문구가 여러 곳에 있을 때: 고른 곳으로 개정 화면에서 개정안을 만든다
+  const pick = (ch, cand) => {
+    const ops = r.plan.ops.map(o => Object.assign({}, o));
+    const op = ops[ch.op_index];
+    if (cand === "all") Object.assign(op, { article: null, path: null, anchor: null, all: true, loc: `규정 전체(${ch.candidates.length}곳)` });
+    else Object.assign(op, { article: cand.article, path: cand.path, anchor: cand.anchor, loc: cand.loc, find: cand.find, repl: cand.repl });
+    delete op.alternatives;
+    op.desc = `${op.loc}: '${op.find}' → '${op.repl}'`;
+    goTab("amend"); $("#am-reg").value = r.entry_id; $("#am-intent").value = $("#agent-text").value;
+    S.amend = { entry_id: r.entry_id, ops, notes: r.plan.notes.filter(n => !/곳입니다/.test(n)), engine: r.plan.engine, effective: r.plan.effective || "", mode: S.lib.numbering.mode };
+    renderOps(); previewAmend();
+  };
+  return el("div", { class: "panel" }, el("h3", {}, "어느 곳을 바꿀까요?"),
+    r.choices.map(ch => el("div", {},
+      el("p", {}, `'${ch.find}' → '${ch.repl}': 같은 문구가 ${ch.candidates.length}곳에 있습니다.`),
+      ch.candidates.map(c => el("div", { class: "quote" }, el("b", {}, c.loc), " ", el("span", { class: "small" }, c.text || c.anchor), " ",
+        el("button", { class: "small primary", onclick: () => pick(ch, c) }, "이곳을 바꾸기"))),
+      ch.find === ch.candidates[0].find && ch.candidates.every(c => c.find === ch.find) ? el("button", { class: "small", onclick: () => pick(ch, "all") }, "모두 바꾸기") : null)));
+}
 
 async function loadLib() {
   S.lib = await api("GET", "/api/library");
@@ -51,11 +76,14 @@ async function runAgent() {
     if (r.route === "amend" && r.preview) {
       out.append(amendResultPanel(r.preview, false));
       out.append(caseLinkPanel(r.case));
+    } else if (r.route === "amend" && r.choices) {
+      out.append(choicePanel(r));
     } else if (r.route === "amend") {
       out.append(el("div", { class: "panel" }, el("p", {}, (r.plan.notes || []).join(" ")), el("button", { onclick: () => { goTab("amend"); $("#am-reg").value = r.entry_id; $("#am-intent").value = $("#agent-text").value; } }, "개정 화면에서 직접 작업 추가")));
     } else if (r.route === "enact") {
       S.enact = r.draft;
       out.append(el("div", { class: "panel" }, el("h3", {}, r.draft.title), el("pre", { class: "law", html: phHtml(r.draft.reg_text) }), el("p", { class: "small muted" }, r.draft.notes.join(" "))));
+      out.append(el("div", { class: "panel" }, el("h3", {}, "위임 범위 검토"), delegTable(r.draft.delegation_check)));
       out.append(caseLinkPanel(r.case));
     } else if (r.route === "impact") {
       out.append(el("div", { class: "panel" }, el("p", {}, r.message), el("button", { class: "primary", onclick: async () => { goTab("impact"); $("#im-law").value = r.law_id; await runImpact({ sample: true }); } }, "시연용 개정본으로 바로 분석")));
@@ -157,9 +185,7 @@ function renderEnact() {
         el("div", { class: "row" }, el("button", { onclick: rebuildEnact }, "고친 내용 반영"),
           el("button", { class: "primary", onclick: async () => { const c = await api("POST", "/api/cases", { kind: "enact", draft: S.enact }); toast("진행 건으로 등록했습니다"); S.caseId = c.id; goTab("cases"); } }, "진행 건으로 등록(문서 세트 만들기)"))),
       el("div", {}, el("h3", {}, "제정안 전문"), el("pre", { class: "law", html: phHtml(d.reg_text) })))));
-  out.append(el("div", { class: "panel" }, el("h3", {}, "위임 범위 검토"),
-    el("table", { class: "t" }, el("tr", {}, el("th", {}, "구분"), el("th", {}, "항목"), el("th", {}, "결과")),
-      d.delegation_check.items.map(i => el("tr", {}, el("td", {}, levelTag(i.level)), el("td", {}, i.item), el("td", {}, i.result))))));
+  out.append(el("div", { class: "panel" }, el("h3", {}, "위임 범위 검토"), delegTable(d.delegation_check)));
   const s = d.similar;
   out.append(el("div", { class: "panel" }, el("h3", {}, "유사 규정 비교표"),
     s.regs.length ? el("table", { class: "t cmp" }, el("tr", {}, el("th", {}, "초안"), s.regs.map(r => el("th", {}, r.title))),
@@ -203,7 +229,7 @@ function renderOps() {
     el("div", { class: "row" }, el("h3", { style: { flex: 1, margin: 0 } }, `개정 작업 ${a.ops.length}개`), el("span", { class: "tag gray" }, `해석: ${a.engine}`)),
     (a.notes || []).map(n => el("p", { class: "small" }, "※ " + n)),
     a.ops.map((op, i) => el("div", { class: "op" }, el("span", { class: "tag info" }, OP_TYPES[op.type] || op.type), el("span", { class: "d" }, op.desc || ""),
-      op.alternatives ? el("select", { onchange: e => { const alt = op.alternatives[e.target.value]; if (alt) { Object.assign(op, { article: alt.article, path: alt.path, anchor: alt.anchor, loc: alt.loc }); op.desc = `${alt.loc}: '${op.find}' → '${op.repl}'`; renderOps(); previewAmend(); } } },
+      op.alternatives ? el("select", { onchange: e => { const alt = op.alternatives[e.target.value]; if (alt) { Object.assign(op, { article: alt.article, path: alt.path, anchor: alt.anchor, loc: alt.loc }, alt.find ? { find: alt.find, repl: alt.repl } : {}); op.desc = `${alt.loc}: '${op.find}' → '${op.repl}'`; renderOps(); previewAmend(); } } },
         el("option", { value: "" }, "다른 위치…"), op.alternatives.map((x, k) => el("option", { value: k }, x.loc))) : null,
       el("button", { class: "small", onclick: () => editOp(i) }, "고치기"),
       el("button", { class: "small danger", onclick: () => { a.ops.splice(i, 1); renderOps(); previewAmend(); } }, "빼기"))),

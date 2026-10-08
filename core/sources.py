@@ -13,6 +13,20 @@ from pathlib import Path
 from .loaders import SUPPORTED, load_bytes, load_folder
 
 
+def safe_parts(path):
+    """올린 파일의 상대경로를 OS와 관계없이 안전한 조각으로 나눈다.
+    드라이브 문자(C:), 절대경로, '..', 빈 조각은 버린다."""
+    parts = []
+    for p in str(path).replace("\\", "/").split("/"):
+        p = p.strip()
+        if not p or p in (".", "..") or ":" in p:
+            continue
+        parts.append(p)
+    if not parts:
+        raise ValueError(f"파일 이름이 없습니다: {path}")
+    return parts
+
+
 class LocalFolderSource:
     kind = "local"
 
@@ -35,10 +49,11 @@ class UploadSource:
         """files: [{"path": 상대경로, "b64": base64 내용}], dest: 사본을 저장할 폴더"""
         self.dest = Path(dest)
         self.dest.mkdir(parents=True, exist_ok=True)
+        root = self.dest.resolve()
         for f in files:
-            rel = Path(f["path"].replace("\\", "/"))
-            parts = [p for p in rel.parts if p not in ("..", "/", "")]
-            target = self.dest.joinpath(*parts)
+            target = root.joinpath(*safe_parts(f["path"]))
+            if root not in target.resolve().parents:
+                raise ValueError(f"허용되지 않는 파일 경로입니다: {f['path']}")
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(base64.b64decode(f["b64"]))
 
