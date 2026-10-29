@@ -3,6 +3,7 @@
 외부 웹 프레임워크를 쓰지 않아 설치·유지관리 부담이 없다.
 """
 import json
+import os
 import mimetypes
 import re
 import traceback
@@ -28,6 +29,8 @@ class Request:
     def body(self):
         if self._body is None:
             n = int(self.handler.headers.get("Content-Length") or 0)
+            if n > 40_000_000 and os.environ.get("PUBLIC_DEMO") == "1":
+                raise HttpError(413, "공개 시연판에서는 한 번에 40MB까지만 올릴 수 있습니다")
             self._body = self.handler.rfile.read(n) if n else b""
         return self._body
 

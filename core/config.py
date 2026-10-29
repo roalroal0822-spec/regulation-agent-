@@ -61,6 +61,10 @@ class Config:
             self.data["data_dir"] = os.environ["APP_DATA_DIR"]
         if os.environ.get("APP_HOST"):
             self.data["host"] = os.environ["APP_HOST"]
+        if os.environ.get("PORT") and not os.environ.get("APP_PORT"):  # Render 같은 호스팅이 정해 주는 포트
+            self.data["port"] = int(os.environ["PORT"])
+        # 공개 시연판: 모델 설정 바꾸기·서버 폴더 읽기 같은 기능을 막는다(인터넷에 올릴 때만 PUBLIC_DEMO=1)
+        self.public = os.environ.get("PUBLIC_DEMO") == "1"
 
     def __getitem__(self, key):
         return self.data[key]

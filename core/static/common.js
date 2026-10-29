@@ -275,3 +275,84 @@ document.addEventListener("DOMContentLoaded", setupLLMBadge);
       .observe(document.body, { childList: true, subtree: true });
   });
 })();
+
+// ------------------------------------------------------------ 접근성: 본문 바로가기, 글자 크기
+function setupA11y() {
+  const main = $("main");
+  if (main && !main.id) main.id = "main";
+  document.body.prepend(el("a", { class: "skip", href: "#main" }, "본문 바로가기"));
+  const hdr = $("header.top");
+  if (!hdr) return;
+  const right = el("div", { class: "hdr-right" });
+  const sizes = [["가", 0], ["가+", 1], ["가++", 2]];
+  let cur = 0;
+  try { cur = +(localStorage.getItem("fs") || 0); } catch (e) {}
+  const btns = sizes.map(([t, v]) => el("button", { class: "fs-btn", "aria-label": `글자 크기 ${t}`, onclick: () => setFs(v) }, t));
+  function setFs(v) {
+    cur = v;
+    document.body.classList.remove("fs-1", "fs-2");
+    if (v) document.body.classList.add("fs-" + v);
+    btns.forEach((b, i) => b.classList.toggle("on", i === v));
+    try { localStorage.setItem("fs", v); } catch (e) {}
+  }
+  setFs(cur);
+  const chip = el("span", { class: "verify-chip", id: "verify-chip", title: "서비스 구조·검증 보기" }, "검증 정보 불러오는 중");
+  chip.addEventListener("click", () => { const b = $("nav.tabs button[data-tab=about]"); if (b) b.click(); });
+  right.append(chip, el("span", { class: "fs-group", role: "group", "aria-label": "글자 크기" }, ...btns));
+  const badge = $("#llm-badge");
+  if (badge) right.append(badge);
+  hdr.append(right);
+  api("GET", "/api/about").then(a => {
+    const mc = a.model_check;
+    if (mc && mc.models && mc.models.length) {
+      chip.textContent = "모델 교체 실측: " + mc.models.map(m => `${m.model} ${m.passed}/${m.total}`).join(" · ");
+      chip.classList.add(mc.models.every(m => m.passed === m.total) ? "ok" : "warn");
+    } else chip.textContent = "모델 교체 실측 전 · 규칙 기반 동작";
+    const sc = a.scorecard;
+    if (sc) chip.textContent += ` · 성적표 ${sc.date}`;
+  }).catch(() => { chip.textContent = "서비스 구조·검증"; });
+}
+document.addEventListener("DOMContentLoaded", setupA11y);
+document.addEventListener("DOMContentLoaded", () => api("GET", "/api/info").then(i => {
+  if (!i.public) return;
+  const b = el("div", { class: "public-note", role: "note" }, "공개 시연판입니다. 모의자료로만 써 보세요(개인정보·실제 업무자료를 넣지 마세요). 넣은 자료는 서버가 다시 시작되면 지워지고, 모델은 연결하지 않은 규칙 기반 상태입니다.");
+  document.body.prepend(b);
+}).catch(() => {}));
+
+// ------------------------------------------------------------ 서비스 구조·검증 화면
+async function renderAbout(box) {
+  box = box || $("#tab-about");
+  const a = await api("GET", "/api/about");
+  box.innerHTML = "";
+  box.append(el("div", { class: "panel" }, el("h2", {}, "답이 만들어지는 과정"),
+    el("p", { class: "small muted" }, a.lead || ""),
+    el("ol", { class: "pipe" }, a.pipeline.map((p, i) => el("li", {}, el("span", { class: "pn" }, String(i + 1).padStart(2, "0")),
+      el("b", {}, p[0]), el("span", { class: "small muted" }, p[1]))))));
+  box.append(el("div", { class: "panel" }, el("h2", {}, `틀린 답을 막는 장치 ${a.guards.length}가지`),
+    el("ol", { class: "guards" }, a.guards.map(g => el("li", {}, g)))));
+  const sc = a.scorecard;
+  const scBox = el("div", { class: "panel" }, el("h2", {}, "정확도 성적표"));
+  if (!sc) scBox.append(el("p", { class: "muted" }, "아직 측정 결과가 없습니다. `python tools/eval.py`를 실행하면 만들어집니다."));
+  else {
+    scBox.append(el("p", { class: "small muted" }, `측정일 ${sc.date} · 재현: ${sc.command} (모델·인터넷 없이 같은 결과) · 문항: ${sc.author}`),
+      el("table", { class: "t" }, el("tr", {}, ["시험", "결과", "무엇을 쟀나"].map(h => el("th", {}, h))),
+        sc.areas.map(x => el("tr", {}, el("td", {}, el("b", {}, x.name)),
+          el("td", {}, el("span", { class: "tag " + (x.passed === x.total ? "ok" : "warn") }, `${x.passed}/${x.total}` + (x.total ? ` (${Math.round(x.passed / x.total * 1000) / 10}%)` : ""))),
+          el("td", { class: "small" }, x.desc)))));
+    const fails = sc.areas.flatMap(x => (x.failures || []).map(f => [x.name, f]));
+    scBox.append(el("details", { open: fails.length > 0 && fails.length <= 8 }, el("summary", {}, `틀린 문항 ${fails.length}건 (고치지 않고 그대로 공개)`),
+      fails.length ? el("ul", { class: "small" }, fails.map(([n, f]) => el("li", {}, `[${n}] ${f}`))) : el("p", { class: "small muted" }, "없음")));
+    if (sc.history && sc.history.length) scBox.append(el("details", {}, el("summary", {}, `측정 이력 ${sc.history.length}차`),
+      el("ol", { class: "small" }, sc.history.map(h => el("li", { style: { marginBottom: "6px" } }, el("b", {}, h.date + (h.note ? ` · ${h.note}` : "")), el("div", { class: "muted" }, h.summary))))));
+  }
+  box.append(scBox);
+  const mc = a.model_check;
+  box.append(el("div", { class: "panel" }, el("h2", {}, "모델 교체 실측"),
+    el("p", { class: "small muted" }, "같은 기능을 서로 다른 모델로 돌려 결과가 정답과 맞는지 시험합니다. 화면 머리의 표시는 이 결과입니다."),
+    mc && mc.models && mc.models.length ? el("table", { class: "t" }, el("tr", {}, ["모델", "결과", "시험 항목"].map(h => el("th", {}, h))),
+      mc.models.map(m => el("tr", {}, el("td", {}, m.model), el("td", {}, `${m.passed}/${m.total}`),
+        el("td", { class: "small" }, m.items.map(i => (i.ok ? "통과 " : "실패 ") + i.name).join(" · ")))))
+      : el("p", {}, "아직 실제 모델로 실측하지 않았습니다. 기관 PC에서 `모델검증.bat`(또는 `python tools/verify_models.py --models 모델1 모델2`)을 실행하면 여기와 화면 머리에 표시됩니다."),
+    mc && mc.date ? el("p", { class: "small muted" }, `실측일 ${mc.date} · 연결 ${mc.provider}`) : null));
+  if (a.data) box.append(el("div", { class: "panel" }, el("h2", {}, "자료와 개인정보"), el("ul", {}, a.data.map(d => el("li", {}, d)))));
+}

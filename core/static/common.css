@@ -300,3 +300,24 @@ button.primary { background: var(--brand); border-color: var(--brand); }
 @media (max-width: 720px) { .masthead .ms-sub, .gov-strip span { display: none; } }
 .panel { border-radius: 16px; }
 @media print { .masthead { display: none; } }
+
+/* 접근성·검증 표시 */
+.skip { position: absolute; left: 8px; top: -60px; z-index: 1000; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; }
+.skip:focus { top: 8px; }
+header.top > .hdr-right { position: absolute; top: 16px; right: max(24px, calc((100vw - 1200px) / 2)); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 70vw; }
+.hdr-right .llm-badge { position: static; }
+.fs-group { display: inline-flex; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; background: var(--panel); }
+.fs-btn { border: 0; border-radius: 0; background: transparent; padding: 5px 10px; font-size: 13px; min-height: 0; box-shadow: none; }
+.fs-btn + .fs-btn { border-left: 1px solid var(--line); }
+.fs-btn.on { background: var(--ink); color: #fff; }
+.verify-chip { font-size: 12.5px; padding: 7px 12px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); cursor: pointer; }
+.verify-chip.ok { color: #248a3d; border-color: #b7e4c7; background: #effaf2; }
+.verify-chip.warn { color: #b25000; border-color: #ffd8a8; background: #fff6ea; }
+body.fs-1 main { zoom: 1.12; } body.fs-2 main { zoom: 1.25; }
+ol.pipe { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+ol.pipe li { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
+ol.pipe .pn { font-size: 12px; color: var(--brand); font-weight: 700; letter-spacing: .08em; }
+ol.guards { margin: 10px 0 0; padding-left: 22px; line-height: 1.8; }
+@media (max-width: 700px) { header.top > .hdr-right { position: static; max-width: none; margin-bottom: 12px; } }
+
+.public-note { background: #fff6ea; color: #8a4b00; border-bottom: 1px solid #ffd8a8; padding: 8px 16px; font-size: 13.5px; text-align: center; }

@@ -163,6 +163,18 @@ def main():
     passed = sum(1 for r in rows if r[2])
     lines += ["", f"통과 {passed} / {len(rows)}"]
     Path(a.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # 화면 머리·'서비스 구조·검증'에 보일 요약(모델별 통과 수). 가짜 모델 시험은 실측으로 표시하지 않는다
+    import json
+    per = {}
+    for m, name, ok, sec, note in rows:
+        d = per.setdefault(m, {"model": m, "passed": 0, "total": 0, "items": []})
+        d["total"] += 1
+        d["passed"] += 1 if ok else 0
+        d["items"].append({"name": name, "ok": bool(ok), "seconds": round(sec, 1), "note": str(note)[:200]})
+    out = ROOT / "검증결과" / ("model_check_mock.json" if a.mock else "model_check.json")
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps({"date": time.strftime("%Y-%m-%d"), "provider": a.provider, "mock": bool(a.mock),
+                               "models": list(per.values())}, ensure_ascii=False, indent=1), encoding="utf-8")
     print("\n".join(lines))
     print(f"\n보고서: {a.out}")
     sys.exit(0 if passed == len(rows) else 1)

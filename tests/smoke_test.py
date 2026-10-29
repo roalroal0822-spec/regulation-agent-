@@ -60,6 +60,10 @@ def check_baton(c):
         yield f"인수인계서 내보내기({fmt})", len(d) > 500
     m = c.call("POST", f"/api/handovers/{h['id']}/export/manual?fmt=hwpx", {}, raw=True)
     yield "업무 매뉴얼 내보내기", len(m) > 500
+    ab = c.call("GET", "/api/about")
+    yield f"서비스 구조·검증(안전장치 {len(ab['guards'])}가지)", len(ab["guards"]) >= 5 and len(ab["pipeline"]) >= 4
+    a = c.call("POST", f"/api/handovers/{h['id']}/ask", {"q": "주민번호 850315-2345678 강사 원천징수는 누구랑 협의해?"})
+    yield f"질문의 신원정보 가림({', '.join(a['masked'])})", "2345678" not in json.dumps(a, ensure_ascii=False) and a["masked"] == ["주민등록번호"]
 
 
 def check_seomu(c):
@@ -78,6 +82,10 @@ def check_seomu(c):
     yield "점검 결과 내보내기", len(d) > 500
     rv = c.call("GET", "/api/revision/sample")
     yield "규정 개정 시연본", bool(rv)
+    ab = c.call("GET", "/api/about")
+    yield f"서비스 구조·검증(안전장치 {len(ab['guards'])}가지)", len(ab["guards"]) >= 5 and len(ab["pipeline"]) >= 4
+    m = c.call("POST", "/api/chat", {"text": "어제 부산 출장 다녀왔어요. 제 번호는 010-1234-5678이에요"})
+    yield f"개인정보 가림({', '.join(m['masked'])})", "010-1234" not in json.dumps(m, ensure_ascii=False) and "휴대전화" in m["masked"]
 
 
 def check_gyujeong(c):
@@ -99,6 +107,11 @@ def check_gyujeong(c):
     yield f"상위법 영향 분석(후보 {len(im['candidates'])}곳)", len(im["candidates"]) >= 3
     ln = c.call("GET", "/api/lint")
     yield f"전체 점검({ln['summary']})", ln["summary"].get("오류", 0) >= 1
+    ab = c.call("GET", "/api/about")
+    yield f"서비스 구조·검증(안전장치 {len(ab['guards'])}가지)", len(ab["guards"]) >= 5 and len(ab["pipeline"]) >= 4
+    sport = next(e for e in lib["entries"] if "체육시설 운영 규정" in json.dumps(e, ensure_ascii=False))
+    pl = c.call("POST", "/api/amend/plan", {"entry_id": sport["id"], "intent": "반환 계좌 110-234-567890 건과 별개로, 대관 사용료 납부 기한을 7일에서 5일로 줄여줘"})
+    yield f"요청의 신원·금융 정보 가림({', '.join(pl['masked'])})", pl["masked"] == ["계좌번호"] and "567890" not in json.dumps(pl, ensure_ascii=False)
 
 
 CHECKS = {"baton": check_baton, "seomu": check_seomu, "gyujeong": check_gyujeong}

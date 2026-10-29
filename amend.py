@@ -25,6 +25,8 @@ Q = r"(?:\"[^\"]+\"|'[^']+'|“[^”]+”|‘[^’]+’|「[^」]+」)"
 RX_ART = re.compile(r"제(\d+)조(?:의(\d+))?(?:\s*제(\d+)항)?(?:\s*제(\d+)호)?")
 RX_REPL = re.compile(rf"(?P<a>{Q}|[^\s'\"“”‘’]+?)\s*에서\s*(?P<b>{Q}|[^\s'\"“”‘’]+?)\s*(?:으로|로)(?=\s|$|[,.]|바|변|줄|늘|조|단|연|상|하|수|고|개|완|강|통|정)")
 RX_REPL2 = re.compile(rf"(?P<a>{Q}|[^\s'\"“”‘’]+?)\s*(?:을|를)\s+(?P<b>{Q}|[^\s'\"“”‘’]+?)\s*(?:으로|로)\s*(?:바꾸|바꿔|변경|수정|고치|고쳐|줄이|줄여|늘리|늘려|단축|연장|조정|통일|대체|한다|하고|상향|하향|완화|강화|해\s*줘|하자|$)")
+NUMP = r"(?:(?:매월|매년|매주|연|월|주)\s*)?\d+\s*(?:일|회|개월|시간|주|년|명|원|분|%)\s*(?:전|이내|이상|이하|후)?"
+RX_NUMPAIR = re.compile(rf"(?<!['\"“‘\d])({NUMP})\s*에서\s*({NUMP})\s*(?=으로|로)")  # 띄어 쓴 수량 표현 두 개를 따옴표로 묶어 읽는다
 RX_DELETE = re.compile(r"제(\d+)조(?:의(\d+))?\s*(?:\([^)]*\))?\s*(?:을|를|는|은)?\s*(?:삭제|없애|폐지)")
 RX_RETITLE = re.compile(rf"제(\d+)조(?:의(\d+))?\s*(?:의)?\s*제목\s*(?:을|를)\s*(?P<t>{Q}|\S+?)\s*(?:으로|로)")
 RX_ADD_ITEM = re.compile(rf"제(\d+)조(?:의(\d+))?(?:\s*제(\d+)항)?\s*에\s*(?P<t>{Q})\s*(?:을|를|라는)?\s*(?:내용\s*(?:을|를)\s*)?(?:호|항목|사항|요건|사유|서류)?(?:로|으로)?\s*(?:추가|넣|신설)")
@@ -145,6 +147,7 @@ def parse_intent(text, entry, lib=None, head="이사장"):
     if m:
         effective = f"{m.group(1)}년 {int(m.group(2))}월 {int(m.group(3))}일"
     for cl in split_clauses(text):
+        cl = RX_NUMPAIR.sub(lambda m: f"'{m.group(1).strip()}'에서 '{m.group(2).strip()}'", cl)  # '7일 전에서 10일 전으로'
         if RX_EFFECT.search(cl) and not RX_REPL.search(cl):
             continue
         op = None
@@ -447,6 +450,10 @@ def llm_ops(llm, entry, intent):
                     break
             if not hit:
                 notes.append(f"모델 제안 제외(현행 조문에 '{find}' 없음): {a.label}")
+                continue
+            new_nums = [n for n in re.findall(r"\d+", repl) if n not in re.findall(r"\d+", intent + " " + find)]
+            if new_nums:  # 기한·금액 같은 숫자는 개정 의도나 현행 글자에 있는 것만 받는다
+                notes.append(f"모델 제안 제외(개정 의도에 없는 숫자 '{new_nums[0]}'): {a.label} '{find}' → '{repl}'")
                 continue
             ops.append({"type": "replace", "article": a.key, "path": list(hit[0]), "find": find, "repl": repl,
                         "anchor": hit[2], "all": False, "loc": a.label + hit[1], "src": "모델"})

@@ -1,0 +1,132 @@
+{
+ "date": "2026-10-29",
+ "provider": "openai",
+ "mock": true,
+ "models": [
+  {
+   "model": "mock-a",
+   "passed": 3,
+   "total": 3,
+   "items": [
+    {
+     "name": "연결 확인",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "확인"
+    },
+    {
+     "name": "규정 제·개정: 개정 의도 → 개정 작업(현행 조문 대조 검증)",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 작업 2개, 검증에서 걸러진 제안 0개"
+    },
+    {
+     "name": "규정 제·개정: 제정 조문 본문 작성",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 조 8개"
+    }
+   ]
+  },
+  {
+   "model": "mock-b",
+   "passed": 3,
+   "total": 3,
+   "items": [
+    {
+     "name": "연결 확인",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "확인"
+    },
+    {
+     "name": "규정 제·개정: 개정 의도 → 개정 작업(현행 조문 대조 검증)",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 작업 2개, 검증에서 걸러진 제안 1개"
+    },
+    {
+     "name": "규정 제·개정: 제정 조문 본문 작성",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 조 8개"
+    }
+   ]
+  },
+  {
+   "model": "mock-gemma",
+   "passed": 3,
+   "total": 3,
+   "items": [
+    {
+     "name": "연결 확인 [젬마(Gemma)]",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "확인"
+    },
+    {
+     "name": "규정 제·개정: 개정 의도 → 개정 작업(현행 조문 대조 검증)",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 작업 2개, 검증에서 걸러진 제안 0개"
+    },
+    {
+     "name": "규정 제·개정: 제정 조문 본문 작성",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 조 8개"
+    }
+   ]
+  },
+  {
+   "model": "mock-exaone",
+   "passed": 3,
+   "total": 3,
+   "items": [
+    {
+     "name": "연결 확인 [엑사원(EXAONE)]",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "확인"
+    },
+    {
+     "name": "규정 제·개정: 개정 의도 → 개정 작업(현행 조문 대조 검증)",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 작업 2개, 검증에서 걸러진 제안 0개"
+    },
+    {
+     "name": "규정 제·개정: 제정 조문 본문 작성",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 조 8개"
+    }
+   ]
+  },
+  {
+   "model": "mock-gpt-oss",
+   "passed": 3,
+   "total": 3,
+   "items": [
+    {
+     "name": "연결 확인 [GPT-OSS]",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "확인"
+    },
+    {
+     "name": "규정 제·개정: 개정 의도 → 개정 작업(현행 조문 대조 검증)",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 작업 2개, 검증에서 걸러진 제안 0개"
+    },
+    {
+     "name": "규정 제·개정: 제정 조문 본문 작성",
+     "ok": true,
+     "seconds": 0.0,
+     "note": "사용 결과: 모델, 조 8개"
+    }
+   ]
+  }
+ ]
+}

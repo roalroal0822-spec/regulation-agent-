@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 
 from core import regparse, webcommon
+from core.pii import SENSITIVE, mask
 from core.config import Config
 from core.export import export, to_hwpx
 from core.llm import LLM
@@ -26,7 +27,7 @@ import lint
 import procedure
 from library import LAYERS, Library, norm_name
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 HERE = Path(__file__).resolve().parent
 SAMPLE = HERE / "sample_data"
 
@@ -36,6 +37,28 @@ store = Store(cfg.data_dir)
 LIB_ROOT = store.path("library")
 app = App(HERE / "static")
 webcommon.register(app, cfg, llm, "규정 제·개정 에이전트", VERSION)
+
+ABOUT = {
+    "lead": "개정 위치·글자·번호 이동·인용 정정은 규정집 원문을 조문 단위로 읽어 규칙으로 처리하고, 모델은 개정 의도 읽기와 제정 조문 문장 다듬기만 돕습니다. 모델이 없어도 같은 개정안이 나옵니다.",
+    "pipeline": [("규정집 읽기", "상위법·기관 규정·서식을 조·항·호 단위로 나누고, 조문끼리의 인용 관계를 모두 찾아 둠"),
+                 ("의도 해석", "'7일에서 5일로', '제8조 다음에 신설', '삭제' 같은 문장을 개정 작업으로 바꿈(모델 연결 시 모델 제안을 대조해 사용)"),
+                 ("위치 확정", "바꿀 글자가 현행 조문에 실제로 있는 곳만 고르고, 여러 곳이면 임의로 고르지 않고 물음"),
+                 ("개정안 작성", "개정문·신구조문대비표·전문을 만들고, 가지 번호/번호 이동 중 기관 관례를 따름"),
+                 ("인용 정정", "번호가 바뀐 조를 인용하는 같은 규정·다른 규정·별표·서식을 찾아 고치거나 '확인 필요'로 남김"),
+                 ("점검·절차", "개정 후 조 번호·인용 오류를 다시 점검하고, 규정관리규정의 절차(심사·공포)를 안내")],
+    "guards": ["모델이 낸 개정 작업은 대상 조가 실제로 있고, 바꿀 글자가 현행 조문에 그대로 있을 때만 씁니다.",
+               "모델이 바꿀 값에 개정 의도와 현행 조문에 없는 숫자(기한·금액)를 넣으면 그 작업을 버립니다.",
+               "같은 글자가 여러 곳에 있으면 한 곳을 임의로 고르지 않고 후보를 보여 주고 고르게 합니다.",
+               "번호 이동 때 인용하는 곳을 모두 찾아 고치고, 뜻이 바뀔 수 있는 곳은 자동으로 고치지 않고 '확인 필요'로 남깁니다.",
+               "제정 초안에서 모델은 조 본문만 다듬고, 조 제목·순서·위임 범위 검토는 규칙 결과를 유지합니다.",
+               "규정집을 바꾸기 전에 이전 판을 보관합니다(원본 파일은 읽기만 함).",
+               "요청 문장에 들어간 주민번호·계좌·카드·여권 번호는 저장·모델 전달 전에 ○○○로 가립니다."],
+    "data": ["시연 규정집(체육시설 운영 규정, 공영주차장 운영 규정 등)과 상위 조례는 가상의 공공기관 기준으로 지어낸 모의자료입니다.",
+             "시연 규정집에는 점검 기능을 보이기 위해 일부러 넣은 오류(빠진 조 번호, 없는 조 인용, 용어 불일치)가 있습니다.",
+             "규정의 담당 부서 전화번호처럼 규정 내용인 번호는 가리지 않습니다. 가리는 것은 신원·금융 정보입니다.",
+             "자료와 기록은 이 PC의 작업 폴더(data)에만 저장되고, 모델을 연결하지 않으면 PC 밖으로 나가지 않습니다."],
+}
+webcommon.register_about(app, HERE, ABOUT)
 
 DEFAULT_SETTINGS = {"org_name": "공공기관", "head": "이사장", "dept": "기획예산팀",
                     "phone": "【연락처】", "email": "【전자우편】", "terms": lint.DEFAULT_TERMS}
@@ -214,6 +237,8 @@ def enact_draft(req):
     b = req.json
     if not b.get("title") or not b.get("purpose"):
         raise HttpError(400, "규정 이름과 제정 목적을 넣어 주세요")
+    for k in ("title", "purpose"):
+        b[k] = mask(b[k], SENSITIVE)[0]
     s = settings()
     deleg = _delegation(b)
     d = enact.make(lib(), b["title"].strip(), b["purpose"].strip(), deleg, b.get("matters"), s["head"], s["org_name"],
@@ -252,10 +277,12 @@ def amend_plan(req):
     e = entry_or_404(b["entry_id"])
     if not (b.get("intent") or "").strip():
         raise HttpError(400, "개정 의도를 적어 주세요")
+    b["intent"], masked = mask(b["intent"], SENSITIVE)
     p = amend.plan(b["intent"], e, lib(), llm if b.get("use_llm", True) else None, settings()["head"])
     for op in p["ops"]:
         op["desc"] = amend.describe(op, e.reg)
     log("개정 의도 해석", f"{e.short}: {b['intent'][:60]} → 작업 {len(p['ops'])}개 ({p['engine']})")
+    p["masked"] = masked
     return p
 
 
@@ -644,6 +671,7 @@ def agent(req):
     text = (req.json.get("text") or "").strip()
     if not text:
         raise HttpError(400, "무엇을 할지 적어 주세요")
+    text, _ = mask(text, SENSITIVE)
     L = lib()
     steps = []
     t = re.sub(r"\s", "", text)

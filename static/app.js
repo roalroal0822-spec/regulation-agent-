@@ -502,5 +502,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (id === "cases") loadCases();
     if (id === "library") renderLibrary();
     if (id === "settings") renderSettings();
+    if (id === "about") renderAbout();
   });
 });
