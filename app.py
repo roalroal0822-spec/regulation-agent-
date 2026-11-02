@@ -31,12 +31,12 @@ VERSION = "1.1.0"
 HERE = Path(__file__).resolve().parent
 SAMPLE = HERE / "sample_data"
 
-cfg = Config(HERE, {"app_title": "규정 제·개정 에이전트", "port": 8103})
+cfg = Config(HERE, {"app_title": "가지런(규정 제·개정 에이전트)", "port": 8103})
 llm = LLM(cfg["llm"])
 store = Store(cfg.data_dir)
 LIB_ROOT = store.path("library")
 app = App(HERE / "static")
-webcommon.register(app, cfg, llm, "규정 제·개정 에이전트", VERSION)
+webcommon.register(app, cfg, llm, "가지런(규정 제·개정 에이전트)", VERSION)
 
 ABOUT = {
     "lead": "개정 위치·글자·번호 이동·인용 정정은 규정집 원문을 조문 단위로 읽어 규칙으로 처리하고, 모델은 개정 의도 읽기와 제정 조문 문장 다듬기만 돕습니다. 모델이 없어도 같은 개정안이 나옵니다.",
@@ -766,13 +766,13 @@ def history(req):
 
 def main():
     import argparse
-    ap = argparse.ArgumentParser(description="규정 제·개정 에이전트 실행")
+    ap = argparse.ArgumentParser(description="가지런(규정 제·개정 에이전트) 실행")
     ap.add_argument("--port", type=int, default=cfg["port"])
     ap.add_argument("--host", default=cfg["host"])
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
     lib()
-    app.run(a.host, a.port, not a.no_browser, "규정 제·개정 에이전트")
+    app.run(a.host, a.port, not a.no_browser, "가지런(규정 제·개정 에이전트)")
 
 
 if __name__ == "__main__":
