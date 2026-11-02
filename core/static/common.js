@@ -147,7 +147,7 @@ function setupTabs(onChange) {
   const nav = $("nav.tabs");
   const ink = nav && el("span", { class: "tab-ink" });
   if (ink) { nav.prepend(ink); nav.classList.add("inked"); }
-  const h1 = $("header.top h1");
+  const h1 = $(".masthead .ms-name b") || $("header.top h1");
   if (nav && h1) {
     nav.prepend(el("span", { class: "nav-title" }, h1.textContent));
     const stick = () => nav.classList.toggle("stuck", nav.getBoundingClientRect().top <= 0 && window.scrollY > 0);
@@ -163,6 +163,7 @@ function setupTabs(onChange) {
     const idx = btns.findIndex(b => b.dataset.tab === id);
     const dir = cur < 0 ? "" : idx > cur ? "from-right" : idx < cur ? "from-left" : "";
     cur = idx;
+    document.body.classList.toggle("on-home", idx === 0);
     btns.forEach(b => b.classList.toggle("on", b.dataset.tab === id));
     moveInk();
     if (btns[idx] && btns[idx].scrollIntoView) btns[idx].scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -281,7 +282,7 @@ function setupA11y() {
   const main = $("main");
   if (main && !main.id) main.id = "main";
   document.body.prepend(el("a", { class: "skip", href: "#main" }, "본문 바로가기"));
-  const hdr = $("header.top");
+  const hdr = $(".masthead") || $("header.top");
   if (!hdr) return;
   const right = el("div", { class: "hdr-right" });
   const sizes = [["가", 0], ["가+", 1], ["가++", 2]];

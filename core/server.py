@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 CORE_STATIC = Path(__file__).parent / "static"
+mimetypes.add_type("font/woff2", ".woff2")
 
 
 class Request:
