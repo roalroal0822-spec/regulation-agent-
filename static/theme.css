@@ -1,0 +1,42 @@
+/* 규정 제·개정 에이전트 고유 화면: '법전'. 짙은 자주 가죽 표지, 금박 선, 조문 기호 장식, 문서 여백 */
+:root {
+  --bg: #f4f1ed; --panel: #ffffff; --ink: #24161a; --muted: #6b5a5e; --line: #e8e1dc; --line-strong: #d3c6c0;
+  --brand: #7a1f35; --brand-strong: #5e1427; --brand-soft: #f6eaed; --navy: #2b0f17; --navy-2: #5e1427;
+  --gold: #c9a24a; --gold-soft: #f7efd9;
+  --shadow: 0 1px 0 rgba(43, 15, 23, .05), 0 8px 24px rgba(43, 15, 23, .07);
+  --focus: 0 0 0 3px rgba(122, 31, 53, .3);
+}
+::selection { background: var(--gold-soft); }
+.gov-strip { background: #1a0a0f; }
+.masthead { background: var(--navy); border-bottom: 1px solid var(--gold); }
+.masthead b { color: #f3e6c8; } .masthead .ms-sub { color: rgba(243, 230, 200, .7); border-left-color: rgba(201, 162, 74, .4); }
+.masthead .ms-mark { background: var(--gold); color: var(--navy); border-radius: 4px; }
+.masthead .llm-badge, .masthead select { background: rgba(255, 255, 255, .08); color: #f3e6c8; }
+/* 머리: 가죽 표지 + 금박 테 + 큰 조문 기호 */
+header.top { background: radial-gradient(120% 140% at 50% 0%, #6d1a2e 0%, var(--navy) 70%); color: #f7ecd2; overflow: hidden;
+  box-shadow: inset 0 0 0 10px var(--navy), inset 0 0 0 11px rgba(201, 162, 74, .7), inset 0 0 0 16px var(--navy), inset 0 0 0 17px rgba(201, 162, 74, .4); }
+header.top::before { content: "§"; position: absolute; left: max(30px, calc((100vw - 1200px) / 2)); top: 30px; font: 400 300px/1 "Batang", serif;
+  color: rgba(201, 162, 74, .12); pointer-events: none; }
+header.top::after { content: "제1조 · 제2조 · 제3조 · 부칙"; position: absolute; right: max(30px, calc((100vw - 1200px) / 2)); bottom: 26px;
+  font: 600 13px "Batang", serif; letter-spacing: .3em; color: rgba(201, 162, 74, .55); }
+header.top .mark { background: transparent; border: 1px solid var(--gold); box-shadow: inset 0 0 0 3px var(--navy), inset 0 0 0 4px rgba(201, 162, 74, .6); border-radius: 4px; }
+header.top .mark svg { stroke: var(--gold); }
+header.top .eyebrow { color: var(--gold); letter-spacing: .35em; font-weight: 700; }
+header.top h1 { color: #fbf3df; font-family: "Batang", "Nanum Myeongjo", "Noto Serif KR", serif; font-weight: 900; letter-spacing: .02em; }
+header.top h1::after { content: ""; display: block; width: 140px; height: 3px; margin: 18px auto 0; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+header.top .sub { color: rgba(247, 236, 210, .85); }
+header.top .highlights li { background: rgba(255, 255, 255, .04); border: 1px solid rgba(201, 162, 74, .35); border-radius: 2px; padding: 14px 18px; }
+header.top .highlights b { color: var(--gold); } header.top .highlights span { color: rgba(247, 236, 210, .72); }
+header.top .muted, header.top .small { color: rgba(247, 236, 210, .7); }
+/* 탭: 금박 밑줄 */
+nav.tabs { background: rgba(255, 255, 255, .95); border-bottom: 1px solid var(--line-strong); }
+nav.tabs button { border-radius: 0; border-bottom: 3px solid transparent; font-family: "Batang", "Nanum Myeongjo", serif; font-weight: 700; }
+nav.tabs button.on, nav.tabs.inked button.on { background: transparent; color: var(--brand); border-bottom-color: var(--gold); }
+nav.tabs .tab-ink { display: none; }
+/* 카드: 법전 지면(머리 선 두 줄) */
+.panel { border-radius: 2px; border: 1px solid var(--line); border-top: 3px double var(--brand); }
+.panel h2 { font-family: "Batang", "Nanum Myeongjo", serif; font-weight: 900; color: var(--brand-strong); }
+.panel h2::before { content: "§ "; color: var(--gold); }
+button.primary { background: var(--brand); border-color: var(--brand); border-radius: 2px; }
+.chip { border-radius: 2px; }
+.foot { background: var(--navy); color: rgba(243, 230, 200, .7); }
