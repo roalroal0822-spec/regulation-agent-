@@ -1,6 +1,13 @@
 @echo off
 chcp 65001 > nul
 cd /d "%~dp0"
+rem Windows 바로 실행판: 함께 든 runtime\ 폴더(파이썬과 라이브러리 포함)가 있으면 설치 없이 바로 실행
+if exist runtime\python.exe (
+  echo 바로 실행판으로 시작합니다. 잠시 뒤 브라우저가 열립니다.
+  runtime\python.exe run.py
+  pause
+  exit /b
+)
 rem 실제 동작하는 Python 3.10 이상을 찾는다 (Microsoft Store 바로가기 python.exe는 건너뜀)
 set PY=
 python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>nul
