@@ -17,7 +17,7 @@
 }
 body { background: var(--bg); font-size: 15.5px; line-height: 1.65; letter-spacing: -.01em; color: var(--ink); }
 ::selection { background: var(--accent-soft); }
-svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:where(.masthead, nav.tabs, header.top, .callout, .trust) svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* 맨 위 띠: 남색, 가운데 정렬 */
 .gov-strip { background: var(--navy); color: #fff; height: 36px; font-size: 12.5px; font-weight: 600; justify-content: center; gap: 10px; padding: 0 16px; border: 0; }
